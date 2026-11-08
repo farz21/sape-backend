@@ -1,20 +1,19 @@
 const express = require('express');
 const cors = require('cors');
-require('dotenv').config();
+
+// Al requerir el archivo de db, el código interno se ejecuta y se conecta a MySQL
+require('./config/db'); 
+
+const authRoutes = require('./routes/authRoutes');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+app.use(cors());
+app.use(express.json());
 
-// Middlewares globales
-app.use(cors()); // Permite peticiones desde el frontend
-app.use(express.json()); // Permite que el backend entienda JSON
+// Conectamos las rutas de autenticación
+// Usamos '/' para que las URLs sigan siendo http://localhost:3000/login
+app.use('/', authRoutes); 
 
-// Ruta de prueba
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', message: 'Servidor de S.A.P.E. funcionando correctamente' });
-});
-
-// Arrancar el servidor
-app.listen(PORT, () => {
-  console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`);
+app.listen(3000, () => {
+  console.log('Servidor Express corriendo en el puerto http://localhost:3000');
 });
