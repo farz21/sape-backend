@@ -12,7 +12,7 @@ const obtenerHistorialEmpleado = async (req, res) => {
         u.apellido, 
         u.email, 
         u.creado_en, 
-        e.empresa,
+        u.empresa,
         e.legajo, 
         e.fecha_ingreso,
         e.id_puesto

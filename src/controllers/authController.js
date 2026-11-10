@@ -1,6 +1,6 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const db = require('../config/db'); // Importamos la conexión a la base de datos
+const db = require('../config/db'); 
 
 const SECRET_KEY = "sape_super_secreto_123";
 
@@ -17,13 +17,32 @@ const registro = async (req, res) => {
     const saltRounds = 10;
     const passwordHasheada = await bcrypt.hash(password, saltRounds);
 
+    // 1. Insertar en la tabla usuarios
     const [result] = await db.execute(
       'INSERT INTO usuarios (nombre, apellido, email, empresa, password, rol) VALUES (?, ?, ?, ?, ?, ?)',
       [nombre, apellido, email, empresa, passwordHasheada, 'empleado']
     );
 
+    const idUsuario = result.insertId;
+
+    // 2. Insertar automáticamente en la tabla empleados (Nuevo bloque)
+    try {
+      const fechaActual = new Date().toISOString().split('T')[0]; 
+      const legajoProvisorio = 'PROV-' + idUsuario; 
+
+      await db.execute(
+        "INSERT INTO empleados (id_usuario, legajo, fecha_ingreso, id_puesto) VALUES (?, ?, ?, ?)",
+        [idUsuario, legajoProvisorio, fechaActual, 1] 
+      );
+    } catch (errorEmpleado) {
+      // Si falla la tabla empleados, eliminamos el usuario recién creado
+      await db.execute("DELETE FROM usuarios WHERE id = ?", [idUsuario]);
+      console.error("Fallo al crear detalles de empleado en registro:", errorEmpleado);
+      return res.status(500).json({ mensaje: "Error interno al generar el legajo." });
+    }
+
     const userData = {
-      id: result.insertId,
+      id: idUsuario,
       nombre,
       apellido,
       email,

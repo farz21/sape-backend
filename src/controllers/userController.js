@@ -7,28 +7,27 @@ const bcrypt = require("bcryptjs");
 // ==========================================
 const obtenerEmpleados = async (req, res) => {
   try {
-    const [empleados] = await db.execute(`
-      SELECT 
+    // Traemos a TODOS los empleados, por eso no usamos ningún "id"
+    const [empleados] = await db.execute(
+      `SELECT 
         u.id, 
         u.nombre, 
         u.apellido, 
         u.email, 
+        u.creado_en, 
         u.empresa, 
-        u.creado_en,
-        e.id_empleado,
-        e.legajo,
-        e.fecha_ingreso
+        e.legajo, 
+        e.fecha_ingreso,
+        e.id_puesto
       FROM usuarios u
-      INNER JOIN empleados e ON u.id = e.id_usuario
-      WHERE u.rol = "empleado"
-    `);
+      LEFT JOIN empleados e ON u.id = e.id_usuario
+      WHERE u.rol = "empleado"`
+    );
 
     res.status(200).json(empleados);
   } catch (error) {
     console.error("Error al obtener empleados:", error);
-    res.status(500).json({
-      mensaje: "Error interno al cargar la lista de empleados."
-    });
+    res.status(500).json({ mensaje: "Error al obtener empleados" });
   }
 };
 
@@ -94,7 +93,7 @@ const crearEmpleado = async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    // 1. Insertar en usuarios
+    // 1. Insertar en la tabla usuarios
     const [resultUser] = await db.execute(
       'INSERT INTO usuarios (nombre, apellido, email, password, empresa, rol) VALUES (?, ?, ?, ?, ?, "empleado")',
       [nombre, apellido, email, hashedPassword, empresa || "S.A.P.E."]
@@ -102,11 +101,18 @@ const crearEmpleado = async (req, res) => {
 
     const idUsuario = resultUser.insertId;
 
-    // 2. Insertar en empleados
-    await db.execute(
-      "INSERT INTO empleados (id_usuario, legajo, fecha_ingreso, id_puesto) VALUES (?, ?, ?, ?)",
-      [idUsuario, legajo, fecha_ingreso, id_puesto || 1]
-    );
+    // 2. Insertar en la tabla empleados (envuelto en su propio try/catch)
+    try {
+      await db.execute(
+        "INSERT INTO empleados (id_usuario, legajo, fecha_ingreso, id_puesto) VALUES (?, ?, ?, ?)",
+        [idUsuario, legajo, fecha_ingreso, id_puesto || 1]
+      );
+    } catch (errorEmpleado) {
+      // ROLLBACK MANUAL: Si falló la creación del empleado, borramos el usuario que acabamos de crear
+      await db.execute("DELETE FROM usuarios WHERE id = ?", [idUsuario]);
+      console.error("Fallo al crear empleado, usuario revertido:", errorEmpleado);
+      throw new Error("Fallo al insertar en la tabla empleados"); 
+    }
 
     res.status(201).json({
       mensaje: "Empleado creado exitosamente."
@@ -114,8 +120,16 @@ const crearEmpleado = async (req, res) => {
 
   } catch (error) {
     console.error("Error al crear empleado:", error);
+    
+    // Atrapamos el error de correo duplicado que vimos antes
+    if (error.code === 'ER_DUP_ENTRY') {
+      return res.status(400).json({ 
+        mensaje: "Ese correo electrónico ya está registrado en el sistema." 
+      });
+    }
+
     res.status(500).json({
-      mensaje: "Error al crear el empleado."
+      mensaje: "Error al crear el empleado. Verifica los datos ingresados."
     });
   }
 };
