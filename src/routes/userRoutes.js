@@ -14,6 +14,7 @@ router.get("/empleados", verificarToken, userController.obtenerEmpleados);
 router.get('/empleados', verificarToken, userController.obtenerEmpleados);
 router.get('/empleados/:id', verificarToken, evaluacionController.obtenerHistorialEmpleado);
 router.post('/evaluaciones', verificarToken, evaluacionController.crearEvaluacion);
+router.delete('/evaluaciones/:id', verificarToken, evaluarRolAdmin, evaluacionController.eliminarEvaluacion);
 
 
 // Rutas para CRUD de empleados

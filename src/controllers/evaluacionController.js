@@ -80,5 +80,25 @@ const crearEvaluacion = async (req, res) => {
     res.status(500).json({ mensaje: "Error al registrar la evaluación." });
   }
 };
+// Eliminar una evaluación
+const eliminarEvaluacion = async (req, res) => {
+  const { id } = req.params;
 
-module.exports = { obtenerHistorialEmpleado, crearEvaluacion };
+  try {
+    const [resultado] = await db.execute(
+      'DELETE FROM evaluaciones WHERE id_evaluacion = ?',
+      [id]
+    );
+
+    if (resultado.affectedRows === 0) {
+      return res.status(404).json({ mensaje: "Evaluación no encontrada." });
+    }
+
+    res.status(200).json({ mensaje: "Evaluación eliminada correctamente." });
+  } catch (error) {
+    console.error("Error al eliminar la evaluación:", error);
+    res.status(500).json({ mensaje: "Error interno al eliminar la evaluación." });
+  }
+};
+
+module.exports = { obtenerHistorialEmpleado, crearEvaluacion, eliminarEvaluacion };
