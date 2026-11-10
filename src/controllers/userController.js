@@ -1,20 +1,209 @@
-const db = require('../config/db'); // Tu conexión a MySQL
 
+const db = require("../config/db");
+const bcrypt = require("bcryptjs");
+
+// ==========================================
+// OBTENER LISTA COMPLETA DE EMPLEADOS
+// ==========================================
 const obtenerEmpleados = async (req, res) => {
   try {
-    // Traemos los datos de la tabla usuarios donde el rol sea 'empleado'
-    // Excluimos la contraseña por seguridad
+    // Traemos a TODOS los empleados, por eso no usamos ningún "id"
     const [empleados] = await db.execute(
-      'SELECT id, nombre, apellido, email, empresa, rol, creado_en FROM usuarios WHERE rol = "empleado"'
+      `SELECT 
+        u.id, 
+        u.nombre, 
+        u.apellido, 
+        u.email, 
+        u.creado_en, 
+        u.empresa, 
+        e.legajo, 
+        e.fecha_ingreso,
+        e.id_puesto
+      FROM usuarios u
+      LEFT JOIN empleados e ON u.id = e.id_usuario
+      WHERE u.rol = "empleado"`
     );
-    
+
     res.status(200).json(empleados);
   } catch (error) {
     console.error("Error al obtener empleados:", error);
-    res.status(500).json({ mensaje: "Error interno al cargar la lista de empleados." });
+    res.status(500).json({ mensaje: "Error al obtener empleados" });
   }
 };
-// Para GET /empleado/dashboard
+
+// ==========================================
+// OBTENER ESTADÍSTICAS DEL DASHBOARD ADMIN
+// ==========================================
+const obtenerEstadisticas = async (req, res) => {
+  try {
+    // 1. Total de empleados (solo con rol 'empleado')
+    const [empleadosRes] = await db.execute(
+      "SELECT COUNT(*) AS total FROM usuarios u INNER JOIN empleados e ON u.id = e.id_usuario WHERE u.rol = 'empleado'"
+    );
+    const totalEmpleados = empleadosRes[0].total; // Extraemos solo el número
+
+    // 2. Distribución de resultados (Semáforos)
+    const [distribucionSemaforo] = await db.execute(`
+      SELECT semaforo as name, COUNT(*) as value 
+      FROM evaluaciones 
+      GROUP BY semaforo
+    `);
+
+    // 3. Promedio de puntajes
+    const [promedioRes] = await db.execute(
+      "SELECT AVG(puntaje_final) as promedio FROM evaluaciones"
+    );
+
+    const promedioPuntaje = promedioRes[0].promedio
+      ? parseFloat(promedioRes[0].promedio).toFixed(2)
+      : "0.00";
+
+    // Enviamos un objeto limpio al frontend
+    res.status(200).json({
+      totalEmpleados,
+      distribucionSemaforo,
+      promedioPuntaje
+    });
+
+  } catch (error) {
+    console.error("Error al cargar estadísticas:", error);
+    res.status(500).json({
+      mensaje: "Error al obtener estadísticas del dashboard."
+    });
+  }
+};
+
+// ==========================================
+// CREAR UN NUEVO EMPLEADO (ALTA)
+// ==========================================
+const crearEmpleado = async (req, res) => {
+  const {
+    nombre,
+    apellido,
+    email,
+    password,
+    empresa,
+    legajo,
+    fecha_ingreso,
+    id_puesto
+  } = req.body;
+
+  try {
+    // Hashear contraseña
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    // 1. Insertar en la tabla usuarios
+    const [resultUser] = await db.execute(
+      'INSERT INTO usuarios (nombre, apellido, email, password, empresa, rol) VALUES (?, ?, ?, ?, ?, "empleado")',
+      [nombre, apellido, email, hashedPassword, empresa || "S.A.P.E."]
+    );
+
+    const idUsuario = resultUser.insertId;
+
+    // 2. Insertar en la tabla empleados (envuelto en su propio try/catch)
+    try {
+      await db.execute(
+        "INSERT INTO empleados (id_usuario, legajo, fecha_ingreso, id_puesto) VALUES (?, ?, ?, ?)",
+        [idUsuario, legajo, fecha_ingreso, id_puesto || 1]
+      );
+    } catch (errorEmpleado) {
+      // ROLLBACK MANUAL: Si falló la creación del empleado, borramos el usuario que acabamos de crear
+      await db.execute("DELETE FROM usuarios WHERE id = ?", [idUsuario]);
+      console.error("Fallo al crear empleado, usuario revertido:", errorEmpleado);
+      throw new Error("Fallo al insertar en la tabla empleados"); 
+    }
+
+    res.status(201).json({
+      mensaje: "Empleado creado exitosamente."
+    });
+
+  } catch (error) {
+    console.error("Error al crear empleado:", error);
+    
+    // Atrapamos el error de correo duplicado que vimos antes
+    if (error.code === 'ER_DUP_ENTRY') {
+      return res.status(400).json({ 
+        mensaje: "Ese correo electrónico ya está registrado en el sistema." 
+      });
+    }
+
+    res.status(500).json({
+      mensaje: "Error al crear el empleado. Verifica los datos ingresados."
+    });
+  }
+};
+
+// ==========================================
+// ACTUALIZAR UN EMPLEADO (MODIFICACIÓN)
+// ==========================================
+const actualizarEmpleado = async (req, res) => {
+  const { id } = req.params;
+  const { nombre, apellido, email, legajo, fecha_ingreso } = req.body;
+
+  try {
+    await db.execute(
+      "UPDATE usuarios SET nombre = ?, apellido = ?, email = ? WHERE id = ?",
+      [nombre, apellido, email, id]
+    );
+
+    await db.execute(
+      "UPDATE empleados SET legajo = ?, fecha_ingreso = ? WHERE id_usuario = ?",
+      [legajo, fecha_ingreso, id]
+    );
+
+    res.status(200).json({
+      mensaje: "Empleado actualizado correctamente."
+    });
+
+  } catch (error) {
+    console.error("Error al actualizar empleado:", error);
+    res.status(500).json({
+      mensaje: "Error al actualizar los datos."
+    });
+  }
+};
+
+// ==========================================
+// ELIMINAR UN EMPLEADO (BAJA)
+// ==========================================
+const eliminarEmpleado = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    // Eliminar evaluaciones relacionadas
+    await db.execute(
+      "DELETE FROM evaluaciones WHERE id_empleado = (SELECT id_empleado FROM empleados WHERE id_usuario = ?)",
+      [id]
+    );
+
+    // Eliminar empleado
+    await db.execute(
+      "DELETE FROM empleados WHERE id_usuario = ?",
+      [id]
+    );
+
+    // Eliminar usuario
+    await db.execute(
+      "DELETE FROM usuarios WHERE id = ?",
+      [id]
+    );
+
+    res.status(200).json({
+      mensaje: "Empleado eliminado del sistema."
+    });
+
+  } catch (error) {
+    console.error("Error al eliminar empleado:", error);
+    res.status(500).json({
+      mensaje: "Error al intentar eliminar el registro."
+    });
+  }
+};
+
+// ==========================================
+// OBTENER DASHBOARD DEL EMPLEADO
+// ==========================================
 const obtenerDashboard = async (req, res) => {
   const idUsuario = req.usuario.id; // ID que viene del token JWT (tabla usuarios)
 
@@ -72,14 +261,25 @@ const obtenerDashboard = async (req, res) => {
     });
   }
 };
-// Para GET /empleado/perfil
+
+// ==========================================
+// OBTENER PERFIL DEL EMPLEADO
+// ==========================================
 const obtenerMiPerfil = async (req, res) => {
   const idUsuario = req.usuario.id;
 
   try {
-    const [perfil] = await db.execute(`
-      SELECT u.nombre, u.apellido, u.email, u.empresa, e.legajo, e.fecha_ingreso, p.nombre as puesto, d.nombre as departamento 
-      FROM usuarios u 
+    const [perfil] = await db.execute(
+      `SELECT 
+        u.nombre,
+        u.apellido,
+        u.email,
+        u.empresa,
+        e.legajo,
+        e.fecha_ingreso,
+        p.nombre as puesto,
+        d.nombre as departamento
+      FROM usuarios u
       INNER JOIN empleados e ON u.id = e.id_usuario
       LEFT JOIN puestos p ON e.id_puesto = p.id_puesto
       LEFT JOIN departamentos d ON p.id_departamento = d.id_departamento
@@ -88,14 +288,30 @@ const obtenerMiPerfil = async (req, res) => {
     );
 
     if (perfil.length === 0) {
-      return res.status(404).json({ mensaje: "Perfil no encontrado." });
+      return res.status(404).json({
+        mensaje: "Perfil no encontrado."
+      });
     }
 
     res.status(200).json(perfil[0]);
+
   } catch (error) {
     console.error(error);
-    res.status(500).json({ mensaje: "Error al cargar el perfil." });
+    res.status(500).json({
+      mensaje: "Error al cargar el perfil."
+    });
   }
 };
 
-module.exports = { obtenerEmpleados, obtenerDashboard, obtenerMiPerfil };
+// ==========================================
+// EXPORTAR CONTROLADORES
+// ==========================================
+module.exports = {
+  obtenerEmpleados,
+  obtenerEstadisticas,
+  crearEmpleado,
+  actualizarEmpleado,
+  eliminarEmpleado,
+  obtenerDashboard,
+  obtenerMiPerfil
+};
