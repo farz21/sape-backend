@@ -5,9 +5,20 @@ const obtenerHistorialEmpleado = async (req, res) => {
   const { id } = req.params;
 
   try {
-    // 1. Datos básicos del usuario
     const [usuario] = await db.execute(
-      'SELECT id, nombre, apellido, email, empresa, creado_en FROM usuarios WHERE id = ? AND rol = "empleado"', 
+      `SELECT 
+        u.id, 
+        u.nombre, 
+        u.apellido, 
+        u.email, 
+        u.creado_en, 
+        e.empresa,
+        e.legajo, 
+        e.fecha_ingreso,
+        e.id_puesto
+      FROM usuarios u
+      LEFT JOIN empleados e ON u.id = e.id_usuario
+      WHERE u.id = ? AND u.rol = "empleado"`, 
       [id]
     );
 
@@ -15,7 +26,7 @@ const obtenerHistorialEmpleado = async (req, res) => {
       return res.status(404).json({ mensaje: "Empleado no encontrado" });
     }
 
-    // 2. Evaluaciones asociadas
+    // 2. Evaluaciones asociadas (ESTO QUEDA IGUAL)
     const [evaluaciones] = await db.execute(
       'SELECT id_evaluacion, fecha, periodo, puntaje_final, semaforo FROM evaluaciones WHERE id_empleado = ? ORDER BY fecha DESC',
       [id]
