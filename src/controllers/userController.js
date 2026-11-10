@@ -34,11 +34,11 @@ const obtenerEmpleados = async (req, res) => {
 // Obtener estadísticas para el Dashboard del Admin
 const obtenerEstadisticas = async (req, res) => {
   try {
-    // 1. Total de empleados registrados en la tabla laboral
+    // 1. Total de empleados (solo con rol 'empleado')
     const [empleadosRes] = await db.execute(
-      "SELECT COUNT(*) as total FROM empleados",
+      "SELECT COUNT(*) AS total FROM usuarios u INNER JOIN empleados e ON u.id = e.id_usuario WHERE u.rol = 'empleado'"
     );
-    const totalEmpleados = empleadosRes[0].total;
+    const totalEmpleados = empleadosRes[0].total; // Extraemos solo el número
 
     // 2. Distribución de resultados (Semáforos)
     const [distribucionSemaforo] = await db.execute(`
@@ -49,12 +49,13 @@ const obtenerEstadisticas = async (req, res) => {
 
     // 3. Promedio de puntajes
     const [promedioRes] = await db.execute(
-      "SELECT AVG(puntaje_final) as promedio FROM evaluaciones",
+      "SELECT AVG(puntaje_final) as promedio FROM evaluaciones"
     );
     const promedioPuntaje = promedioRes[0].promedio
       ? parseFloat(promedioRes[0].promedio).toFixed(2)
-      : 0;
+      : "0.00";
 
+    // Enviamos un objeto limpio al frontend
     res.status(200).json({
       totalEmpleados,
       distribucionSemaforo,
