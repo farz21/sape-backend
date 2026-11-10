@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const userController = require("../controllers/userController");
 const evaluacionController = require("../controllers/evaluacionController");
-const verificarToken = require("../middlewares/authMiddleware");
+const { verificarToken, evaluarRolAdmin } = require('../middlewares/authMiddleware'); // <--- Asegúrate de incluirlo aquí
 
 // Estadísticas del Dashboard Admin
 router.get('/admin/estadisticas', verificarToken, userController.obtenerEstadisticas);
