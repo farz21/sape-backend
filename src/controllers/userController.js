@@ -205,25 +205,28 @@ const eliminarEmpleado = async (req, res) => {
 // OBTENER DASHBOARD DEL EMPLEADO
 // ==========================================
 const obtenerDashboard = async (req, res) => {
-  const idUsuario = req.usuario.id;
+  const idUsuario = req.usuario.id; // ID que viene del token JWT (tabla usuarios)
 
   try {
-    const [usuario] = await db.execute(
-      `SELECT e.id_empleado, u.nombre, u.apellido
+    // 1. Buscamos el registro en la tabla empleados usando el id_usuario
+    const [empleadoRes] = await db.execute(
+      `SELECT e.id_empleado, u.nombre, u.apellido, u.email, u.empresa, e.legajo, e.fecha_ingreso
        FROM usuarios u
        INNER JOIN empleados e ON u.id = e.id_usuario
        WHERE u.id = ?`,
       [idUsuario]
     );
 
-    if (usuario.length === 0) {
+    if (empleadoRes.length === 0) {
       return res.status(404).json({
         mensaje: "Usuario sin legajo asignado."
       });
     }
 
-    const idEmpleado = usuario[0].id_empleado;
+    const empleado = empleadoRes[0];
+    const idEmpleado = empleado.id_empleado; // ¡Este es el ID que usa la tabla evaluaciones!
 
+    // 2. Buscamos las evaluaciones usando el id_empleado correcto
     const [evaluaciones] = await db.execute(
       `SELECT id_evaluacion, fecha, periodo, puntaje_final, semaforo
        FROM evaluaciones
@@ -232,7 +235,7 @@ const obtenerDashboard = async (req, res) => {
       [idEmpleado]
     );
 
-    // Planes de acción simulados
+    // Planes de acción (puedes dejarlos estáticos o traerlos de una tabla si la creaste)
     const planes = [
       {
         id_plan: 1,
@@ -244,14 +247,15 @@ const obtenerDashboard = async (req, res) => {
       }
     ];
 
+    // Enviamos el objeto con la estructura que espera tu frontend
     res.status(200).json({
-      empleado: usuario[0],
-      evaluaciones,
-      planes
+      empleado: empleado,
+      evaluaciones: evaluaciones,
+      planes: planes
     });
 
   } catch (error) {
-    console.error(error);
+    console.error("Error al cargar el dashboard del empleado:", error);
     res.status(500).json({
       mensaje: "Error al cargar el dashboard."
     });
