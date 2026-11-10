@@ -89,11 +89,10 @@ const crearEmpleado = async (req, res) => {
   } = req.body;
 
   try {
-    // Hashear contraseña
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    // 1. Insertar en la tabla usuarios
+    // 1. Insertar en usuarios
     const [resultUser] = await db.execute(
       'INSERT INTO usuarios (nombre, apellido, email, password, empresa, rol) VALUES (?, ?, ?, ?, ?, "empleado")',
       [nombre, apellido, email, hashedPassword, empresa || "S.A.P.E."]
@@ -101,36 +100,24 @@ const crearEmpleado = async (req, res) => {
 
     const idUsuario = resultUser.insertId;
 
-    // 2. Insertar en la tabla empleados (envuelto en su propio try/catch)
+    // 2. Insertar en empleados ASEGURANDO guardar el id_usuario
     try {
       await db.execute(
         "INSERT INTO empleados (id_usuario, legajo, fecha_ingreso, id_puesto) VALUES (?, ?, ?, ?)",
         [idUsuario, legajo, fecha_ingreso, id_puesto || 1]
       );
     } catch (errorEmpleado) {
-      // ROLLBACK MANUAL: Si falló la creación del empleado, borramos el usuario que acabamos de crear
       await db.execute("DELETE FROM usuarios WHERE id = ?", [idUsuario]);
-      console.error("Fallo al crear empleado, usuario revertido:", errorEmpleado);
       throw new Error("Fallo al insertar en la tabla empleados"); 
     }
 
-    res.status(201).json({
-      mensaje: "Empleado creado exitosamente."
-    });
-
+    res.status(201).json({ mensaje: "Empleado creado exitosamente." });
   } catch (error) {
     console.error("Error al crear empleado:", error);
-    
-    // Atrapamos el error de correo duplicado que vimos antes
     if (error.code === 'ER_DUP_ENTRY') {
-      return res.status(400).json({ 
-        mensaje: "Ese correo electrónico ya está registrado en el sistema." 
-      });
+      return res.status(400).json({ mensaje: "Ese correo electrónico ya está registrado." });
     }
-
-    res.status(500).json({
-      mensaje: "Error al crear el empleado. Verifica los datos ingresados."
-    });
+    res.status(500).json({ mensaje: "Error al crear el empleado." });
   }
 };
 
@@ -205,10 +192,10 @@ const eliminarEmpleado = async (req, res) => {
 // OBTENER DASHBOARD DEL EMPLEADO
 // ==========================================
 const obtenerDashboard = async (req, res) => {
-  const idUsuario = req.usuario.id; // ID que viene del token JWT (tabla usuarios)
+  const idUsuario = req.usuario.id; // ID del token (tabla usuarios)
 
   try {
-    // 1. Buscamos el registro en la tabla empleados usando el id_usuario
+    // 1. Buscamos al empleado asociado a este usuario
     const [empleadoRes] = await db.execute(
       `SELECT e.id_empleado, u.nombre, u.apellido, u.email, u.empresa, e.legajo, e.fecha_ingreso
        FROM usuarios u
@@ -219,35 +206,27 @@ const obtenerDashboard = async (req, res) => {
 
     if (empleadoRes.length === 0) {
       return res.status(404).json({
-        mensaje: "Usuario sin legajo asignado."
+        mensaje: "Usuario sin legajo asignado en la base de datos."
       });
     }
 
     const empleado = empleadoRes[0];
-    const idEmpleado = empleado.id_empleado; // ¡Este es el ID que usa la tabla evaluaciones!
+    const idEmpleadoReal = empleado.id_empleado; // El ID real para buscar evaluaciones
 
-    // 2. Buscamos las evaluaciones usando el id_empleado correcto
+    // 2. Buscamos las evaluaciones utilizando estrictamente el id_empleado
     const [evaluaciones] = await db.execute(
       `SELECT id_evaluacion, fecha, periodo, puntaje_final, semaforo
        FROM evaluaciones
        WHERE id_empleado = ?
-       ORDER BY fecha DESC`,
-      [idEmpleado]
+       ORDER BY fecha ASC`,
+      [idEmpleadoReal]
     );
 
-    // Planes de acción (puedes dejarlos estáticos o traerlos de una tabla si la creaste)
     const planes = [
-      {
-        id_plan: 1,
-        objetivo: "Mejorar tiempos de entrega en sprints"
-      },
-      {
-        id_plan: 2,
-        objetivo: "Completar certificación de React"
-      }
+      { id_plan: 1, objetivo: "Mejorar tiempos de entrega en sprints" },
+      { id_plan: 2, objetivo: "Completar certificación de React" }
     ];
 
-    // Enviamos el objeto con la estructura que espera tu frontend
     res.status(200).json({
       empleado: empleado,
       evaluaciones: evaluaciones,
@@ -256,9 +235,7 @@ const obtenerDashboard = async (req, res) => {
 
   } catch (error) {
     console.error("Error al cargar el dashboard del empleado:", error);
-    res.status(500).json({
-      mensaje: "Error al cargar el dashboard."
-    });
+    res.status(500).json({ mensaje: "Error al cargar el dashboard." });
   }
 };
 
