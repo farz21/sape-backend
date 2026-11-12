@@ -2,9 +2,9 @@ const express = require("express");
 const router = express.Router();
 const userController = require("../controllers/userController");
 const evaluacionController = require("../controllers/evaluacionController");
-// Importamos los nuevos controladores
 const checkinController = require("../controllers/checkinController"); 
 const metasController = require("../controllers/metasController"); 
+const dueloController = require('../controllers/dueloController');
 const { verificarToken, evaluarRolAdmin } = require('../middlewares/authMiddleware');
 
 // ==========================================
@@ -27,6 +27,10 @@ router.post('/empleados', verificarToken, evaluarRolAdmin, userController.crearE
 router.put('/empleados/:id', verificarToken, evaluarRolAdmin, userController.actualizarEmpleado);
 router.delete('/empleados/:id', verificarToken, evaluarRolAdmin, userController.eliminarEmpleado);
 
+// Duelos y Análisis Estratégico por IA 
+router.post('/admin/duelos/comparar', verificarToken, evaluarRolAdmin, dueloController.compararEmpleados);
+router.get('/admin/duelos/historial', verificarToken, evaluarRolAdmin, dueloController.obtenerHistorialDuelos);
+
 
 // ==========================================
 // RUTAS DEL EMPLEADO
@@ -36,14 +40,13 @@ router.delete('/empleados/:id', verificarToken, evaluarRolAdmin, userController.
 router.get('/empleado/dashboard', verificarToken, userController.obtenerDashboard);
 router.get('/empleado/perfil', verificarToken, userController.obtenerMiPerfil);
 
-// Nuevas rutas: Check-ins de estado de ánimo y progreso
+// Check-ins de estado de ánimo y progreso
 router.post('/empleado/checkin', verificarToken, checkinController.crearCheckin);
 router.get('/empleado/checkins', verificarToken, checkinController.obtenerMisCheckins);
 
-// Nuevas rutas: Metas y KPIs
+// Metas y KPIs
 router.get('/empleado/metas', verificarToken, metasController.obtenerMisMetas);
 router.put('/empleado/metas/:id/progreso', verificarToken, metasController.actualizarProgresoMeta);
 
 
-// ÚNICO module.exports SIEMPRE al final del archivo
 module.exports = router;

@@ -1,18 +1,20 @@
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+const Groq = require("groq-sdk");
 
-// Inicializamos el cliente de Gemini con tu clave del .env
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-// Usamos Flash porque es el modelo más rápido y gratuito ideal para textos
-const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+// Inicializamos Groq leyendo la llave del .env
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
-/**
- * Analiza dos perfiles de empleados y genera un veredicto para el "Duelo"
- */
+// Usaremos el modelo Llama 3 (versión 70B, que es súper inteligente para análisis)
+const MODELO = "openai/gpt-oss-120b";
+
 const generarAnalisisDuelo = async (empleadoA, empleadoB) => {
   try {
+    if (!empleadoA || !empleadoB) {
+      throw new Error("Se necesitan los datos de ambos empleados.");
+    }
+
     const prompt = `
       Actúa como un Analista de Recursos Humanos Senior experto en evaluación de desempeño.
-      A continuación, te presentaré los datos y métricas recientes de dos empleados que están siendo evaluados para un posible ascenso o retención en su período de prueba.
+      A continuación, te presentaré los datos de dos empleados evaluados para un posible ascenso.
 
       EMPLEADO A:
       ${JSON.stringify(empleadoA, null, 2)}
@@ -21,49 +23,53 @@ const generarAnalisisDuelo = async (empleadoA, empleadoB) => {
       ${JSON.stringify(empleadoB, null, 2)}
 
       Tu tarea:
-      1. Compara objetivamente a ambos empleados destacando sus fortalezas y debilidades.
-      2. Si uno de ellos está en período de prueba y reportó obstáculos (check-ins), tenlo en cuenta para tu análisis.
-      3. Determina un ganador claro (o declara un empate técnico) justificando tu decisión basándote estrictamente en los datos.
-      4. Propón un breve plan de acción (1 o 2 metas) para el empleado que no fue seleccionado.
+      1. Compara objetivamente a ambos empleados destacando fortalezas y debilidades.
+      2. Ten en cuenta los obstáculos reportados en sus check-ins.
+      3. Determina un ganador claro justificando tu decisión.
+      4. Propón un breve plan de acción para el que no fue seleccionado.
 
-      Responde en un formato profesional, directo y estructurado, sin saludos.
+      Responde en un formato profesional y estructurado. No uses saludos.
     `;
 
-    const resultado = await model.generateContent(prompt);
-    return resultado.response.text();
+    console.log(`[Groq IA] Enviando datos a ${MODELO}...`);
+    
+    const chatCompletion = await groq.chat.completions.create({
+      messages: [{ role: "user", content: prompt }],
+      model: MODELO,
+      temperature: 0.7, // 0.7 da un tono analítico y profesional
+    });
+
+    console.log("[Groq IA] ¡Respuesta generada con éxito!");
+    return chatCompletion.choices[0].message.content;
+
   } catch (error) {
-    console.error("Error en la IA (Duelo):", error);
-    throw new Error("No se pudo generar el análisis comparativo.");
+    console.error("Error en la IA (Duelo Groq):", error);
+    throw new Error("No se pudo generar el análisis comparativo: " + (error.message || error));
   }
 };
 
-/**
- * Genera un feedback empático para el empleado basado en su evaluación mensual y sus propios check-ins
- */
 const generarFeedbackEvaluacion = async (evaluacionAdmin, checkinsEmpleado) => {
   try {
+    if (!evaluacionAdmin) throw new Error("Faltan datos de evaluación.");
+
     const prompt = `
-      Actúa como un Coach de Desarrollo Profesional empático y constructivo.
-      Acabas de recibir la evaluación de desempeño mensual de un empleado (hecha por su supervisor) y los propios check-ins que el empleado registró durante el mes.
+      Actúa como un Coach de Desarrollo Profesional empático.
+      EVALUACIÓN DEL SUPERVISOR: ${JSON.stringify(evaluacionAdmin, null, 2)}
+      REPORTES DEL EMPLEADO: ${JSON.stringify(checkinsEmpleado || [], null, 2)}
 
-      EVALUACIÓN DEL SUPERVISOR:
-      ${JSON.stringify(evaluacionAdmin, null, 2)}
-
-      REPORTES DEL EMPLEADO (Check-ins del mes):
-      ${JSON.stringify(checkinsEmpleado, null, 2)}
-
-      Tu tarea:
-      Redacta un mensaje de retroalimentación de máximo 3 párrafos dirigido directamente al empleado (háblale de "tú").
-      - Empieza reconociendo sus logros o su nivel de motivación.
-      - Si hay una brecha (ej. el supervisor le dio baja nota en algo, pero el empleado reportó alta carga de trabajo u obstáculos), aborda el tema con empatía.
-      - Termina con un consejo práctico y accionable para mejorar el próximo mes.
+      Redacta un mensaje de retroalimentación de máximo 3 párrafos dirigido al empleado (háblale de "tú"), reconociendo logros, abordando brechas con empatía y dando un consejo práctico.
     `;
 
-    const resultado = await model.generateContent(prompt);
-    return resultado.response.text();
+    const chatCompletion = await groq.chat.completions.create({
+      messages: [{ role: "user", content: prompt }],
+      model: MODELO,
+      temperature: 0.7,
+    });
+
+    return chatCompletion.choices[0].message.content;
   } catch (error) {
-    console.error("Error en la IA (Feedback):", error);
-    throw new Error("No se pudo generar el feedback del empleado.");
+    console.error("Error en la IA (Feedback Groq):", error);
+    throw new Error("No se pudo generar el feedback: " + (error.message || error));
   }
 };
 

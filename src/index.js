@@ -1,8 +1,8 @@
+require('dotenv').config(); // Cargamos las variables de entorno desde el archivo .env
 const express = require('express');
 const cors = require('cors');
 
 require('./config/db'); // Inicializa la base de datos
-
 const authRoutes = require('./routes/authRoutes');
 const userRoutes = require('./routes/userRoutes'); // Importamos las nuevas rutas
 
