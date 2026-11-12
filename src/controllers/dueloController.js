@@ -1,5 +1,5 @@
-const db = require('../config/db');
-const iaService = require('../services/iaService');
+const db = require("../config/db");
+const iaService = require("../services/iaService");
 
 const compararEmpleados = async (req, res) => {
   const { id_empleado_a, id_empleado_b } = req.body;
@@ -11,13 +11,13 @@ const compararEmpleados = async (req, res) => {
 
   if (!id_empleado_a || !id_empleado_b) {
     return res.status(400).json({
-      mensaje: "Se requieren dos empleados para realizar el duelo."
+      mensaje: "Se requieren dos empleados para realizar el duelo.",
     });
   }
 
   if (Number(id_empleado_a) === Number(id_empleado_b)) {
     return res.status(400).json({
-      mensaje: "No se puede comparar a un empleado consigo mismo."
+      mensaje: "No se puede comparar a un empleado consigo mismo.",
     });
   }
 
@@ -32,7 +32,7 @@ const compararEmpleados = async (req, res) => {
          JOIN usuarios u ON e.id_usuario = u.id
          JOIN puestos p ON e.id_puesto = p.id_puesto
          WHERE e.id_empleado = ?`,
-        [id]
+        [id],
       );
 
       if (empleadoData.length === 0) return null;
@@ -44,7 +44,7 @@ const compararEmpleados = async (req, res) => {
          FROM evaluaciones
          WHERE id_empleado = ?
          ORDER BY fecha DESC LIMIT 5`,
-        [id]
+        [id],
       );
 
       const [checkins] = await db.execute(
@@ -53,7 +53,7 @@ const compararEmpleados = async (req, res) => {
          FROM checkins_empleado
          WHERE id_empleado = ?
          ORDER BY fecha DESC LIMIT 3`,
-        [id]
+        [id],
       );
 
       console.log(`Historial del empleado ${id} obtenido.`);
@@ -61,7 +61,7 @@ const compararEmpleados = async (req, res) => {
       return {
         info_general: empleadoData[0],
         evaluaciones,
-        ultimos_checkins: checkins
+        ultimos_checkins: checkins,
       };
     };
 
@@ -69,20 +69,22 @@ const compararEmpleados = async (req, res) => {
 
     const [candidatoA, candidatoB] = await Promise.all([
       obtenerDatosEmpleado(id_empleado_a),
-      obtenerDatosEmpleado(id_empleado_b)
+      obtenerDatosEmpleado(id_empleado_b),
     ]);
 
     if (!candidatoA || !candidatoB) {
       return res.status(404).json({
-        mensaje: "Uno o ambos empleados no fueron encontrados en el sistema."
+        mensaje: "Uno o ambos empleados no fueron encontrados en el sistema.",
       });
     }
 
     console.log("Ambos perfiles obtenidos correctamente.");
     console.log("Enviando información a Gemini...");
 
-    const analisisComparativo =
-      await iaService.generarAnalisisDuelo(candidatoA, candidatoB);
+    const analisisComparativo = await iaService.generarAnalisisDuelo(
+      candidatoA,
+      candidatoB,
+    );
 
     console.log("Gemini devolvió el análisis correctamente.");
     console.log("Guardando resultado en la base de datos...");
@@ -91,7 +93,12 @@ const compararEmpleados = async (req, res) => {
       `INSERT INTO historial_duelos_ia
        (id_admin, id_empleado_a, id_empleado_b, analisis_comparativo)
        VALUES (?, ?, ?, ?)`,
-      [id_admin, id_empleado_a, id_empleado_b, analisisComparativo]
+      [
+        id_admin,
+        id_empleado_a,
+        id_empleado_b,
+        JSON.stringify(analisisComparativo),
+      ],
     );
 
     console.log("Duelo guardado correctamente.");
@@ -100,17 +107,23 @@ const compararEmpleados = async (req, res) => {
     return res.status(200).json({
       mensaje: "Duelo y análisis estratégico generado con éxito.",
       id_duelo: resultado.insertId,
-      candidato_a: candidatoA.info_general,
-      candidato_b: candidatoB.info_general,
-      veredicto_ia: analisisComparativo
+      // Le agregamos un 'spread operator' (...) para unir la info general con el array de evaluaciones
+      candidato_a: {
+        ...candidatoA.info_general,
+        evaluaciones: candidatoA.evaluaciones,
+      },
+      candidato_b: {
+        ...candidatoB.info_general,
+        evaluaciones: candidatoB.evaluaciones,
+      },
+      veredicto_ia: analisisComparativo,
     });
-
   } catch (error) {
     console.error("Error al procesar el duelo:", error);
 
     return res.status(500).json({
       mensaje: "Error interno al procesar el duelo comparativo.",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -129,7 +142,7 @@ const obtenerHistorialDuelos = async (req, res) => {
        JOIN empleados eb ON d.id_empleado_b = eb.id_empleado
        JOIN usuarios ub ON eb.id_usuario = ub.id
        JOIN usuarios admin ON d.id_admin = admin.id
-       ORDER BY d.fecha_duelo DESC`
+       ORDER BY d.fecha_duelo DESC`,
     );
 
     res.status(200).json(duelos);
@@ -141,5 +154,5 @@ const obtenerHistorialDuelos = async (req, res) => {
 
 module.exports = {
   compararEmpleados,
-  obtenerHistorialDuelos
+  obtenerHistorialDuelos,
 };
