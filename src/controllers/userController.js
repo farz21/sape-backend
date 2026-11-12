@@ -7,30 +7,33 @@ const bcrypt = require("bcryptjs");
 // ==========================================
 const obtenerEmpleados = async (req, res) => {
   try {
-    // Traemos a TODOS los empleados, por eso no usamos ningún "id"
     const [empleados] = await db.execute(
       `SELECT 
-        u.id, 
-        u.nombre, 
-        u.apellido, 
-        u.email, 
-        u.creado_en, 
-        u.empresa, 
-        e.legajo, 
+        e.id_empleado,
+        u.id AS id_usuario,
+        u.nombre,
+        u.apellido,
+        u.email,
+        u.creado_en,
+        u.empresa,
+        e.legajo,
         e.fecha_ingreso,
         e.id_puesto
       FROM usuarios u
-      LEFT JOIN empleados e ON u.id = e.id_usuario
-      WHERE u.rol = "empleado"`
+      INNER JOIN empleados e ON u.id = e.id_usuario
+      WHERE u.rol = 'empleado'`
     );
 
     res.status(200).json(empleados);
+
   } catch (error) {
     console.error("Error al obtener empleados:", error);
-    res.status(500).json({ mensaje: "Error al obtener empleados" });
+
+    res.status(500).json({
+      mensaje: "Error al obtener empleados"
+    });
   }
 };
-
 // ==========================================
 // OBTENER ESTADÍSTICAS DEL DASHBOARD ADMIN
 // ==========================================
