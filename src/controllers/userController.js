@@ -76,6 +76,9 @@ const obtenerEstadisticas = async (req, res) => {
 // ==========================================
 // CREAR UN NUEVO EMPLEADO (ALTA)
 // ==========================================
+// ==========================================
+// CREAR UN NUEVO EMPLEADO (ALTA)
+// ==========================================
 const crearEmpleado = async (req, res) => {
   const {
     nombre,
@@ -87,6 +90,11 @@ const crearEmpleado = async (req, res) => {
     fecha_ingreso,
     id_puesto
   } = req.body;
+
+  // Validar campos obligatorios que vienen del formulario
+  if (!nombre || !apellido || !email || !password || !legajo || !fecha_ingreso) {
+    return res.status(400).json({ mensaje: "Faltan campos obligatorios por completar." });
+  }
 
   try {
     const salt = await bcrypt.genSalt(10);
@@ -107,17 +115,24 @@ const crearEmpleado = async (req, res) => {
         [idUsuario, legajo, fecha_ingreso, id_puesto || 1]
       );
     } catch (errorEmpleado) {
+      // Si falla la tabla empleados, borramos el usuario creado para mantener la consistencia
       await db.execute("DELETE FROM usuarios WHERE id = ?", [idUsuario]);
-      throw new Error("Fallo al insertar en la tabla empleados"); 
+      
+      // Imprimimos el error real de MySQL en la consola para depurar fácil
+      console.error("Error técnico detallado en empleados:", errorEmpleado.message);
+      
+      return res.status(400).json({ 
+        mensaje: "Fallo al insertar en la tabla empleados. Verifica que el Puesto seleccionado exista o que el Legajo no esté repetido." 
+      });
     }
 
     res.status(201).json({ mensaje: "Empleado creado exitosamente." });
   } catch (error) {
-    console.error("Error al crear empleado:", error);
+    console.error("Error al crear usuario base:", error);
     if (error.code === 'ER_DUP_ENTRY') {
       return res.status(400).json({ mensaje: "Ese correo electrónico ya está registrado." });
     }
-    res.status(500).json({ mensaje: "Error al crear el empleado." });
+    res.status(500).json({ mensaje: "Error interno al crear el empleado." });
   }
 };
 

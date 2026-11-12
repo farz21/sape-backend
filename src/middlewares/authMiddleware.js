@@ -1,28 +1,24 @@
 const jwt = require('jsonwebtoken');
 
-const SECRET_KEY = "sape_super_secreto_123";
+// 1. Usar variable de entorno para mayor seguridad (con fallback)
+const SECRET_KEY = process.env.JWT_SECRET || "sape_super_secreto_123";
 
 const verificarToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   
-  if (!authHeader) {
-    return res.status(403).json({ mensaje: "Se requiere un token de acceso." });
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(403).json({ mensaje: "Acceso denegado. Se requiere un token de acceso válido (Bearer)." });
   }
 
   const token = authHeader.split(" ")[1]; 
 
-  // 🛠️ TRUCO TEMPORAL PARA EL MOCK LOGIN: Si es el token falso del admin, lo dejamos pasar
-  if (token === "fake-jwt-token-123" || token === "fake-jwt-token-456") {
-    req.usuario = { id: 1, rol: "administrador", email: "admin@sape.com" };
-    return next();
-  }
-
   try {
+    // 2. Verificación real del token
     const decodificado = jwt.verify(token, SECRET_KEY);
     req.usuario = decodificado; 
     next(); 
   } catch (error) {
-    return res.status(401).json({ mensaje: "Token inválido o expirado." });
+    return res.status(401).json({ mensaje: "Token inválido o expirado. Por favor, inicie sesión nuevamente." });
   }
 };
 
