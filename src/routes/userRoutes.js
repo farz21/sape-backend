@@ -26,7 +26,7 @@ router.delete('/evaluaciones/:id', verificarToken, evaluarRolAdmin, evaluacionCo
 router.post('/empleados', verificarToken, evaluarRolAdmin, userController.crearEmpleado);
 router.put('/empleados/:id', verificarToken, evaluarRolAdmin, userController.actualizarEmpleado);
 router.delete('/empleados/:id', verificarToken, evaluarRolAdmin, userController.eliminarEmpleado);
-
+router.put('/empleado/cambiar-password', verificarToken, userController.cambiarPassword);
 // Duelos y Análisis Estratégico por IA 
 router.post('/admin/duelos/comparar', verificarToken, evaluarRolAdmin, dueloController.compararEmpleados);
 router.get('/admin/duelos/historial', verificarToken, evaluarRolAdmin, dueloController.obtenerHistorialDuelos);
