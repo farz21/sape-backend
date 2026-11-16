@@ -224,19 +224,20 @@ const obtenerDashboard = async (req, res) => {
 
     if (empleadoRes.length === 0) {
       return res.status(404).json({
-        mensaje: "Usuario sin legajo asignado en la base de datos."
+        mensaje: "Usuario sin legajo asignado en la base de datos.",
       });
     }
 
     const empleado = empleadoRes[0];
     const idEmpleadoReal = empleado.id_empleado; // El ID real para buscar evaluaciones
 
-    // 2. Buscamos las evaluaciones utilizando estrictamente el id_empleado
+    // 2. Buscamos las evaluaciones INCLUYENDO el feedback de la IA
     const [evaluaciones] = await db.execute(
-      `SELECT id_evaluacion, fecha, periodo, puntaje_final, semaforo
-       FROM evaluaciones
-       WHERE id_empleado = ?
-       ORDER BY fecha ASC`,
+      `SELECT ev.id_evaluacion, ev.fecha, ev.periodo, ev.puntaje_final, ev.semaforo, ia.analisis_generado
+       FROM evaluaciones ev
+       LEFT JOIN feedback_ia_evaluaciones ia ON ev.id_evaluacion = ia.id_evaluacion
+       WHERE ev.id_empleado = ?
+       ORDER BY ev.fecha DESC`,
       [idEmpleadoReal]
     );
 
@@ -297,6 +298,52 @@ const obtenerMiPerfil = async (req, res) => {
     });
   }
 };
+// ==========================================
+// CAMBIAR CONTRASEÑA DEL EMPLEADO
+// ==========================================
+const cambiarPassword = async (req, res) => {
+  const idUsuario = req.usuario.id; // Obtenido del token JWT
+  const { passwordActual, nuevaPassword } = req.body;
+
+  if (!passwordActual || !nuevaPassword) {
+    return res.status(400).json({ mensaje: "Todos los campos son obligatorios." });
+  }
+
+  try {
+    // 1. Buscamos el usuario actual en la base de datos
+    const [usuarios] = await db.execute(
+      "SELECT password FROM usuarios WHERE id = ?",
+      [idUsuario]
+    );
+
+    if (usuarios.length === 0) {
+      return res.status(404).json({ mensaje: "Usuario no encontrado." });
+    }
+
+    const usuario = usuarios[0];
+
+    // 2. Verificamos que la contraseña actual coincida con el hash
+    const esPasswordValida = await bcrypt.compare(passwordActual, usuario.password);
+    if (!esPasswordValida) {
+      return res.status(400).json({ mensaje: "La contraseña actual es incorrecta." });
+    }
+
+    // 3. Hasheamos la nueva contraseña (con un salt de 10)
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(nuevaPassword, salt);
+
+    // 4. Actualizamos en la tabla usuarios
+    await db.execute(
+      "UPDATE usuarios SET password = ? WHERE id = ?",
+      [hashedPassword, idUsuario]
+    );
+
+    res.status(200).json({ mensaje: "Contraseña actualizada exitosamente." });
+  } catch (error) {
+    console.error("Error al cambiar contraseña:", error);
+    res.status(500).json({ mensaje: "Error interno al cambiar la contraseña." });
+  }
+};
 
 // ==========================================
 // EXPORTAR CONTROLADORES
@@ -308,5 +355,6 @@ module.exports = {
   actualizarEmpleado,
   eliminarEmpleado,
   obtenerDashboard,
-  obtenerMiPerfil
+  obtenerMiPerfil,
+  cambiarPassword
 };
