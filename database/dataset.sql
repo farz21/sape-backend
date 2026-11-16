@@ -203,6 +203,6 @@ CREATE TABLE `historial_duelos_ia` (
 -- 5. DATOS POR DEFECTO (ADMINISTRADOR)
 -- Contraseña: "admin123" encriptada con Bcrypt (60 caracteres exactos)
 INSERT INTO `usuarios` (`nombre`, `apellido`, `email`, `empresa`, `password`, `rol`) 
-VALUES ('Administrador', 'SAPE', 'admin@sape.com', 'S.A.P.E.', '$2b$10$EP/V.01xS.3z52vH.CWeReT.dO2T.w0bF4wM7B5r/r.v1Q3hP8l2K', 'administrador');
+VALUES ('Administrador', 'SAPE', 'admin@sape.com', 'S.A.P.E.', '$2b$10$fhkReaURCLWuLCK0crNvYupvAxJGjiTTB5e2lvfKgzeRCHNvfzkeW', 'administrador');
 
 SET FOREIGN_KEY_CHECKS=1;

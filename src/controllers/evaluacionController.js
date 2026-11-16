@@ -36,9 +36,19 @@ const obtenerHistorialEmpleado = async (req, res) => {
       [idEmpleadoReal],
     );
 
+    // 3. Buscamos el último check-in registrado por el empleado para dárselo de contexto al admin
+    const [ultimoCheckin] = await db.execute(
+      `SELECT nivel_motivacion, carga_trabajo, logros_semana, obstaculos, fecha 
+       FROM checkins_empleado 
+       WHERE id_empleado = ? 
+       ORDER BY fecha DESC LIMIT 1`,
+      [idEmpleadoReal],
+    );
+
     res.status(200).json({
       datos: empleadoFicha[0],
       evaluaciones: evaluaciones,
+      ultimoCheckin: ultimoCheckin[0] || null, // 👈 Lo mandamos al frontend
     });
   } catch (error) {
     console.error("Error al obtener historial:", error);
