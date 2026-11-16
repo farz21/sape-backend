@@ -3,7 +3,7 @@ const Groq = require("groq-sdk");
 // Inicializamos Groq leyendo la llave del .env
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
-// Usaremos el modelo Llama 3 (versión 70B, que es súper inteligente para análisis)
+// Usaremos el modelo configurado
 const MODELO = "openai/gpt-oss-120b";
 
 const generarAnalisisDuelo = async (empleadoA, empleadoB) => {
@@ -13,10 +13,8 @@ const generarAnalisisDuelo = async (empleadoA, empleadoB) => {
     }
 
     const prompt = `
-      Actúa como un Analista de Recursos Humanos Senior.
-
-      Analiza los datos de los dos empleados para proporcionar
-      una comparación objetiva que sirva de apoyo al administrador.
+      Actúa como un Analista de Recursos Humanos Senior experto en evaluación de desempeño.
+      A continuación, te presentaré los datos de dos empleados evaluados para un posible ascenso.
 
       EMPLEADO A:
       ${JSON.stringify(empleadoA, null, 2)}
@@ -24,137 +22,16 @@ const generarAnalisisDuelo = async (empleadoA, empleadoB) => {
       EMPLEADO B:
       ${JSON.stringify(empleadoB, null, 2)}
 
-      INSTRUCCIONES:
-      - Compara las evaluaciones y los check-ins disponibles.
-      - Identifica fortalezas y oportunidades de mejora de cada empleado.
-      - Ten en cuenta los obstáculos reportados.
-      - Explica las diferencias relevantes con información concreta.
-      - No inventes datos, porcentajes ni resultados.
-      - Si falta información, indícalo expresamente.
-      - No tomes una decisión automática de ascenso ni declares
-        un ganador definitivo.
-      - Las conclusiones son orientativas y deben ser revisadas
-        por el administrador.
-      - Redacta en español profesional y claro.
+      Tu tarea:
+      1. Compara objetivamente a ambos empleados destacando fortalezas y debilidades.
+      2. Ten en cuenta los obstáculos reportados en sus check-ins.
+      3. Determina un ganador claro justificando tu decisión.
+      4. Propón un breve plan de acción para el que no fue seleccionado.
+
+      Responde en un formato profesional y estructurado. No uses saludos.
     `;
 
     console.log(`[Groq IA] Enviando datos a ${MODELO}...`);
-
-    const chatCompletion = await groq.chat.completions.create({
-      messages: [
-        {
-          role: "system",
-          content:
-            "Eres un analista de Recursos Humanos objetivo. " +
-            "Debes analizar información laboral sin inventar datos."
-        },
-        {
-          role: "user",
-          content: prompt
-        }
-      ],
-      model: MODELO,
-      temperature: 0.3,
-      response_format: {
-        type: "json_schema",
-        json_schema: {
-          name: "analisis_duelo_empleados",
-          strict: true,
-          schema: {
-            type: "object",
-            properties: {
-              resumen: {
-                type: "string"
-              },
-              fortalezas_a: {
-                type: "array",
-                items: { type: "string" }
-              },
-              fortalezas_b: {
-                type: "array",
-                items: { type: "string" }
-              },
-              mejoras_a: {
-                type: "array",
-                items: { type: "string" }
-              },
-              mejoras_b: {
-                type: "array",
-                items: { type: "string" }
-              },
-              factores_comparados: {
-                type: "array",
-                items: {
-                  type: "object",
-                  properties: {
-                    factor: { type: "string" },
-                    empleado_a: { type: "string" },
-                    empleado_b: { type: "string" }
-                  },
-                  required: [
-                    "factor",
-                    "empleado_a",
-                    "empleado_b"
-                  ],
-                  additionalProperties: false
-                }
-              },
-              recomendaciones: {
-                type: "array",
-                items: { type: "string" }
-              },
-              conclusion: {
-                type: "string"
-              }
-            },
-            required: [
-              "resumen",
-              "fortalezas_a",
-              "fortalezas_b",
-              "mejoras_a",
-              "mejoras_b",
-              "factores_comparados",
-              "recomendaciones",
-              "conclusion"
-            ],
-            additionalProperties: false
-          }
-        }
-      }
-    });
-
-    const contenido = chatCompletion.choices[0].message.content;
-
-    if (!contenido) {
-      throw new Error("Groq devolvió una respuesta vacía.");
-    }
-
-    const analisis = JSON.parse(contenido);
-
-    console.log("[Groq IA] Análisis estructurado generado.");
-
-    return analisis;
-
-  } catch (error) {
-    console.error("Error en la IA (Duelo Groq):", error);
-
-    throw new Error(
-      "No se pudo generar el análisis comparativo: " +
-      (error.message || error)
-    );
-  }
-};
-const generarFeedbackEvaluacion = async (evaluacionAdmin, checkinsEmpleado) => {
-  try {
-    if (!evaluacionAdmin) throw new Error("Faltan datos de evaluación.");
-
-    const prompt = `
-      Actúa como un Coach de Desarrollo Profesional empático.
-      EVALUACIÓN DEL SUPERVISOR: ${JSON.stringify(evaluacionAdmin, null, 2)}
-      REPORTES DEL EMPLEADO: ${JSON.stringify(checkinsEmpleado || [], null, 2)}
-
-      Redacta un mensaje de retroalimentación de máximo 3 párrafos dirigido al empleado (háblale de "tú"), reconociendo logros, abordando brechas con empatía y dando un consejo práctico.
-    `;
 
     const chatCompletion = await groq.chat.completions.create({
       messages: [{ role: "user", content: prompt }],
@@ -162,14 +39,51 @@ const generarFeedbackEvaluacion = async (evaluacionAdmin, checkinsEmpleado) => {
       temperature: 0.7,
     });
 
+    console.log("[Groq IA] ¡Respuesta generada con éxito!");
+    return chatCompletion.choices[0].message.content;
+  } catch (error) {
+    console.error("Error en la IA (Duelo Groq):", error);
+    throw new Error(
+      "No se pudo generar el análisis comparativo: " + (error.message || error),
+    );
+  }
+};
+
+const generarFeedbackEvaluacion = async (evaluacionAdmin, checkinsEmpleado) => {
+  try {
+    if (!evaluacionAdmin) throw new Error("Faltan datos de evaluación.");
+
+    const nombreEmpleado = evaluacionAdmin.nombre_empleado || "Colaborador";
+
+    const prompt = `
+      Actúa como un supervisor o líder de recursos humanos empático y directo.
+      DATOS DE EVALUACIÓN: ${JSON.stringify(evaluacionAdmin, null, 2)}
+      REPORTES DEL EMPLEADO (Check-ins recientes): ${JSON.stringify(checkinsEmpleado || [], null, 2)}
+
+      Redacta un mensaje de retroalimentación simple, claro y motivador dirigido al empleado.
+      
+      REGLAS ESTRICTAS DE FORMATO:
+      1. Comienza saludando por su nombre real (ej: "Hola ${nombreEmpleado}, ...").
+      2. Sé breve y directo: redacta un único párrafo o máximo dos párrafos cortos (no más de 60-80 palabras en total).
+      3. Menciona de forma simple su puntaje y un consejo rápido o aliento basado en sus check-ins, sin extenderte en explicaciones complejas ni teorizar de más.
+    `;
+
+    const chatCompletion = await groq.chat.completions.create({
+      messages: [{ role: "user", content: prompt }],
+      model: MODELO,
+      temperature: 0.5, // Temperatura más baja para respuestas más directas y menos creativas/extensas
+    });
+
     return chatCompletion.choices[0].message.content;
   } catch (error) {
     console.error("Error en la IA (Feedback Groq):", error);
-    throw new Error("No se pudo generar el feedback: " + (error.message || error));
+    throw new Error(
+      "No se pudo generar el feedback: " + (error.message || error),
+    );
   }
 };
 
 module.exports = {
   generarAnalisisDuelo,
-  generarFeedbackEvaluacion
+  generarFeedbackEvaluacion,
 };
