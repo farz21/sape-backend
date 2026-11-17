@@ -83,7 +83,112 @@ const generarFeedbackEvaluacion = async (evaluacionAdmin, checkinsEmpleado) => {
   }
 };
 
+// ==========================================
+// GENERAR PLANES DE ACCIÓN CON IA
+// ==========================================
+const generarPlanesAccion = async (evaluacion, checkins, feedback) => {
+  try {
+    if (!evaluacion) {
+      throw new Error("Faltan los datos de la evaluación.");
+    }
+
+    const prompt = `
+      Actúa como un especialista en Recursos Humanos y desarrollo profesional.
+
+      Debes proponer exactamente 3 objetivos de mejora para un empleado,
+      basándote en su evaluación, sus check-ins y su retroalimentación.
+
+      EVALUACIÓN:
+      ${JSON.stringify(evaluacion, null, 2)}
+
+      CHECK-INS RECIENTES:
+      ${JSON.stringify(checkins || [], null, 2)}
+
+      FEEDBACK:
+      ${feedback || "No se pudo generar feedback previo."}
+
+      REGLAS:
+      1. Los objetivos deben ser concretos, realistas y medibles.
+      2. Deben estar relacionados con las dificultades o áreas de mejora detectadas.
+      3. No inventes información personal ni afirmes que el empleado tiene problemas que no aparecen en los datos.
+      4. Cada objetivo debe tener un título breve y una descripción con acciones concretas.
+      5. El plazo debe expresarse como una cantidad de días entre 7 y 90.
+      6. Utiliza un tono profesional, respetuoso y constructivo.
+
+      RESPONDE EXCLUSIVAMENTE con JSON válido, sin Markdown ni explicaciones,
+      siguiendo exactamente esta estructura:
+
+      {
+        "objetivos": [
+          {
+            "titulo": "Título breve",
+            "descripcion": "Descripción de las acciones concretas",
+            "dias_plazo": 30
+          }
+        ]
+      }
+    `;
+
+    const chatCompletion = await groq.chat.completions.create({
+      messages: [{ role: "user", content: prompt }],
+      model: MODELO,
+      temperature: 0.3,
+    });
+
+    const contenido = chatCompletion.choices[0].message.content;
+
+    // Limpiamos posibles bloques Markdown que pueda devolver el modelo.
+    const contenidoLimpio = contenido
+      .replace(/```json/gi, "")
+      .replace(/```/g, "")
+      .trim();
+
+    const respuesta = JSON.parse(contenidoLimpio);
+
+    if (!Array.isArray(respuesta.objetivos) || respuesta.objetivos.length === 0) {
+      throw new Error("La IA no devolvió objetivos válidos.");
+    }
+
+    // Validamos y limitamos la cantidad de objetivos.
+    const objetivos = respuesta.objetivos.slice(0, 3).map((objetivo) => {
+      if (
+        typeof objetivo.titulo !== "string" ||
+        typeof objetivo.descripcion !== "string" ||
+        !objetivo.titulo.trim() ||
+        !objetivo.descripcion.trim()
+      ) {
+        throw new Error("La IA devolvió un objetivo incompleto.");
+      }
+
+      const dias = Number(objetivo.dias_plazo);
+
+      if (!Number.isFinite(dias)) {
+        throw new Error("La IA devolvió un plazo inválido.");
+      }
+
+      return {
+        titulo: objetivo.titulo.trim().slice(0, 150),
+        descripcion: objetivo.descripcion.trim(),
+        dias_plazo: Math.min(90, Math.max(7, Math.round(dias))),
+      };
+    });
+
+    return objetivos;
+  } catch (error) {
+    console.error("Error al generar planes de acción con IA:", error);
+    throw new Error(
+      "No se pudieron generar los planes de acción: " + (error.message || error)
+    );
+  }
+};
+/*
 module.exports = {
   generarAnalisisDuelo,
   generarFeedbackEvaluacion,
+};*/
+
+module.exports = {
+  generarAnalisisDuelo,
+  generarFeedbackEvaluacion,
+  generarPlanesAccion,
 };
