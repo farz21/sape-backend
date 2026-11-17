@@ -1,7 +1,7 @@
 const db = require("../config/db");
 const iaService = require("../services/iaService"); // Importamos el servicio de IA para generar feedback
 
-// Obtener detalle de un empleado y sus evaluaciones
+// Obtener detalle de un empleado, sus evaluaciones y su último check-in
 const obtenerHistorialEmpleado = async (req, res) => {
   const { id } = req.params; // Aquí llega el id_empleado
 
@@ -36,7 +36,7 @@ const obtenerHistorialEmpleado = async (req, res) => {
       [idEmpleadoReal],
     );
 
-    // 3. Buscamos el último check-in registrado por el empleado para dárselo de contexto al admin
+    // 3. Buscamos el último check-in registrado por el empleado (el más reciente)
     const [ultimoCheckin] = await db.execute(
       `SELECT nivel_motivacion, carga_trabajo, logros_semana, obstaculos, fecha 
        FROM checkins_empleado 
@@ -45,14 +45,16 @@ const obtenerHistorialEmpleado = async (req, res) => {
       [idEmpleadoReal],
     );
 
-    res.status(200).json({
+    // 4. Respondemos todo junto de manera limpia y sincronizada
+    return res.status(200).json({
       datos: empleadoFicha[0],
       evaluaciones: evaluaciones,
-      ultimoCheckin: ultimoCheckin[0] || null, // 👈 Lo mandamos al frontend
+      ultimoCheckin: ultimoCheckin[0] || null, // 👈 Ahora sí viaja el más reciente
     });
+
   } catch (error) {
     console.error("Error al obtener historial:", error);
-    res.status(500).json({ mensaje: "Error al obtener el historial." });
+    return res.status(500).json({ mensaje: "Error al obtener el historial." });
   }
 };
 
@@ -63,7 +65,6 @@ const crearEvaluacion = async (req, res) => {
   const fecha = new Date().toISOString().split("T")[0];
 
   try {
-    // 🛠️ CORRECCIÓN: Buscamos EXCLUSIVAMENTE por id_empleado para evitar cruces
     const [empCheck] = await db.execute(
       "SELECT id_empleado FROM empleados WHERE id_empleado = ?",
       [id_empleado],
@@ -71,13 +72,11 @@ const crearEvaluacion = async (req, res) => {
 
     if (empCheck.length === 0) {
       return res.status(404).json({
-        mensaje:
-          "No se encontró la ficha de empleado para asociar la evaluación.",
+        mensaje: "No se encontró la ficha de empleado para asociar la evaluación.",
       });
     }
     const idEmpleadoReal = empCheck[0].id_empleado;
 
-    // 2. Insertamos la evaluación base en MySQL asegurando el idEmpleadoReal
     const [resultado] = await db.execute(
       "INSERT INTO evaluaciones (id_empleado, id_evaluador, fecha, periodo, puntaje_final, semaforo) VALUES (?, ?, ?, ?, ?, ?)",
       [idEmpleadoReal, id_evaluador, fecha, periodo, puntaje_final, semaforo],
@@ -88,13 +87,11 @@ const crearEvaluacion = async (req, res) => {
     // 🤖 BLOQUE DE INTELIGENCIA ARTIFICIAL
     // ==========================================
     try {
-      // A. Extraemos los últimos 4 check-ins del empleado
       const [checkins] = await db.execute(
         "SELECT nivel_motivacion, carga_trabajo, logros_semana, obstaculos, fecha FROM checkins_empleado WHERE id_empleado = ? ORDER BY fecha DESC LIMIT 4",
         [idEmpleadoReal],
       );
 
-      // B. 🔍 Buscamos el nombre y apellido real en la tabla usuarios
       const [infoUsuario] = await db.execute(
         `SELECT u.nombre, u.apellido 
          FROM empleados e 
@@ -108,7 +105,6 @@ const crearEvaluacion = async (req, res) => {
           ? `${infoUsuario[0].nombre} ${infoUsuario[0].apellido}`
           : "Colaborador";
 
-      // C. Estructuramos un objeto limpio y exclusivo para la evaluación
       const evaluacionAdmin = {
         nombre_empleado: nombreCompleto,
         periodo,
@@ -116,13 +112,11 @@ const crearEvaluacion = async (req, res) => {
         semaforo,
       };
 
-      // D. Llamamos exclusivamente al generador de feedback de evaluación
       const analisisGenerado = await iaService.generarFeedbackEvaluacion(
         evaluacionAdmin,
         checkins,
       );
 
-      // E. Guardamos el feedback en la base de datos
       await db.execute(
         "INSERT INTO feedback_ia_evaluaciones (id_evaluacion, id_empleado, analisis_generado) VALUES (?, ?, ?)",
         [idEvaluacionGenerada, idEmpleadoReal, analisisGenerado],
@@ -135,13 +129,13 @@ const crearEvaluacion = async (req, res) => {
     }
     // ==========================================
 
-    res.status(201).json({
+    return res.status(201).json({
       mensaje: "Evaluación registrada con éxito y analizada por IA.",
       id_evaluacion: idEvaluacionGenerada,
     });
   } catch (error) {
     console.error("Error al registrar evaluación:", error);
-    res.status(500).json({ mensaje: "Error al registrar la evaluación." });
+    return res.status(500).json({ mensaje: "Error al registrar la evaluación." });
   }
 };
 
@@ -159,12 +153,10 @@ const eliminarEvaluacion = async (req, res) => {
       return res.status(404).json({ mensaje: "Evaluación no encontrada." });
     }
 
-    res.status(200).json({ mensaje: "Evaluación eliminada correctamente." });
+    return res.status(200).json({ mensaje: "Evaluación eliminada correctamente." });
   } catch (error) {
     console.error("Error al eliminar la evaluación:", error);
-    res
-      .status(500)
-      .json({ mensaje: "Error interno al eliminar la evaluación." });
+    return res.status(500).json({ mensaje: "Error interno al eliminar la evaluación." });
   }
 };
 
