@@ -1,4 +1,3 @@
-
 const db = require("../config/db");
 const bcrypt = require("bcryptjs");
 
@@ -21,16 +20,15 @@ const obtenerEmpleados = async (req, res) => {
         e.id_puesto
       FROM usuarios u
       INNER JOIN empleados e ON u.id = e.id_usuario
-      WHERE u.rol = 'empleado'`
+      WHERE u.rol = 'empleado'`,
     );
 
     res.status(200).json(empleados);
-
   } catch (error) {
     console.error("Error al obtener empleados:", error);
 
     res.status(500).json({
-      mensaje: "Error al obtener empleados"
+      mensaje: "Error al obtener empleados",
     });
   }
 };
@@ -41,7 +39,7 @@ const obtenerEstadisticas = async (req, res) => {
   try {
     // 1. Total de empleados (solo con rol 'empleado')
     const [empleadosRes] = await db.execute(
-      "SELECT COUNT(*) AS total FROM usuarios u INNER JOIN empleados e ON u.id = e.id_usuario WHERE u.rol = 'empleado'"
+      "SELECT COUNT(*) AS total FROM usuarios u INNER JOIN empleados e ON u.id = e.id_usuario WHERE u.rol = 'empleado'",
     );
     const totalEmpleados = empleadosRes[0].total; // Extraemos solo el número
 
@@ -54,7 +52,7 @@ const obtenerEstadisticas = async (req, res) => {
 
     // 3. Promedio de puntajes
     const [promedioRes] = await db.execute(
-      "SELECT AVG(puntaje_final) as promedio FROM evaluaciones"
+      "SELECT AVG(puntaje_final) as promedio FROM evaluaciones",
     );
 
     const promedioPuntaje = promedioRes[0].promedio
@@ -65,13 +63,12 @@ const obtenerEstadisticas = async (req, res) => {
     res.status(200).json({
       totalEmpleados,
       distribucionSemaforo,
-      promedioPuntaje
+      promedioPuntaje,
     });
-
   } catch (error) {
     console.error("Error al cargar estadísticas:", error);
     res.status(500).json({
-      mensaje: "Error al obtener estadísticas del dashboard."
+      mensaje: "Error al obtener estadísticas del dashboard.",
     });
   }
 };
@@ -91,12 +88,21 @@ const crearEmpleado = async (req, res) => {
     empresa,
     legajo,
     fecha_ingreso,
-    id_puesto
+    id_puesto,
   } = req.body;
 
   // Validar campos obligatorios que vienen del formulario
-  if (!nombre || !apellido || !email || !password || !legajo || !fecha_ingreso) {
-    return res.status(400).json({ mensaje: "Faltan campos obligatorios por completar." });
+  if (
+    !nombre ||
+    !apellido ||
+    !email ||
+    !password ||
+    !legajo ||
+    !fecha_ingreso
+  ) {
+    return res
+      .status(400)
+      .json({ mensaje: "Faltan campos obligatorios por completar." });
   }
 
   try {
@@ -106,7 +112,7 @@ const crearEmpleado = async (req, res) => {
     // 1. Insertar en usuarios
     const [resultUser] = await db.execute(
       'INSERT INTO usuarios (nombre, apellido, email, password, empresa, rol) VALUES (?, ?, ?, ?, ?, "empleado")',
-      [nombre, apellido, email, hashedPassword, empresa || "S.A.P.E."]
+      [nombre, apellido, email, hashedPassword, empresa || "S.A.P.E."],
     );
 
     const idUsuario = resultUser.insertId;
@@ -115,25 +121,31 @@ const crearEmpleado = async (req, res) => {
     try {
       await db.execute(
         "INSERT INTO empleados (id_usuario, legajo, fecha_ingreso, id_puesto) VALUES (?, ?, ?, ?)",
-        [idUsuario, legajo, fecha_ingreso, id_puesto || 1]
+        [idUsuario, legajo, fecha_ingreso, id_puesto || 1],
       );
     } catch (errorEmpleado) {
       // Si falla la tabla empleados, borramos el usuario creado para mantener la consistencia
       await db.execute("DELETE FROM usuarios WHERE id = ?", [idUsuario]);
-      
+
       // Imprimimos el error real de MySQL en la consola para depurar fácil
-      console.error("Error técnico detallado en empleados:", errorEmpleado.message);
-      
-      return res.status(400).json({ 
-        mensaje: "Fallo al insertar en la tabla empleados. Verifica que el Puesto seleccionado exista o que el Legajo no esté repetido." 
+      console.error(
+        "Error técnico detallado en empleados:",
+        errorEmpleado.message,
+      );
+
+      return res.status(400).json({
+        mensaje:
+          "Fallo al insertar en la tabla empleados. Verifica que el Puesto seleccionado exista o que el Legajo no esté repetido.",
       });
     }
 
     res.status(201).json({ mensaje: "Empleado creado exitosamente." });
   } catch (error) {
     console.error("Error al crear usuario base:", error);
-    if (error.code === 'ER_DUP_ENTRY') {
-      return res.status(400).json({ mensaje: "Ese correo electrónico ya está registrado." });
+    if (error.code === "ER_DUP_ENTRY") {
+      return res
+        .status(400)
+        .json({ mensaje: "Ese correo electrónico ya está registrado." });
     }
     res.status(500).json({ mensaje: "Error interno al crear el empleado." });
   }
@@ -149,22 +161,21 @@ const actualizarEmpleado = async (req, res) => {
   try {
     await db.execute(
       "UPDATE usuarios SET nombre = ?, apellido = ?, email = ? WHERE id = ?",
-      [nombre, apellido, email, id]
+      [nombre, apellido, email, id],
     );
 
     await db.execute(
       "UPDATE empleados SET legajo = ?, fecha_ingreso = ? WHERE id_usuario = ?",
-      [legajo, fecha_ingreso, id]
+      [legajo, fecha_ingreso, id],
     );
 
     res.status(200).json({
-      mensaje: "Empleado actualizado correctamente."
+      mensaje: "Empleado actualizado correctamente.",
     });
-
   } catch (error) {
     console.error("Error al actualizar empleado:", error);
     res.status(500).json({
-      mensaje: "Error al actualizar los datos."
+      mensaje: "Error al actualizar los datos.",
     });
   }
 };
@@ -179,29 +190,22 @@ const eliminarEmpleado = async (req, res) => {
     // Eliminar evaluaciones relacionadas
     await db.execute(
       "DELETE FROM evaluaciones WHERE id_empleado = (SELECT id_empleado FROM empleados WHERE id_usuario = ?)",
-      [id]
+      [id],
     );
 
     // Eliminar empleado
-    await db.execute(
-      "DELETE FROM empleados WHERE id_usuario = ?",
-      [id]
-    );
+    await db.execute("DELETE FROM empleados WHERE id_usuario = ?", [id]);
 
     // Eliminar usuario
-    await db.execute(
-      "DELETE FROM usuarios WHERE id = ?",
-      [id]
-    );
+    await db.execute("DELETE FROM usuarios WHERE id = ?", [id]);
 
     res.status(200).json({
-      mensaje: "Empleado eliminado del sistema."
+      mensaje: "Empleado eliminado del sistema.",
     });
-
   } catch (error) {
     console.error("Error al eliminar empleado:", error);
     res.status(500).json({
-      mensaje: "Error al intentar eliminar el registro."
+      mensaje: "Error al intentar eliminar el registro.",
     });
   }
 };
@@ -219,7 +223,7 @@ const obtenerDashboard = async (req, res) => {
        FROM usuarios u
        INNER JOIN empleados e ON u.id = e.id_usuario
        WHERE u.id = ?`,
-      [idUsuario]
+      [idUsuario],
     );
 
     if (empleadoRes.length === 0) {
@@ -238,20 +242,22 @@ const obtenerDashboard = async (req, res) => {
        LEFT JOIN feedback_ia_evaluaciones ia ON ev.id_evaluacion = ia.id_evaluacion
        WHERE ev.id_empleado = ?
        ORDER BY ev.fecha DESC`,
-      [idEmpleadoReal]
+      [idEmpleadoReal],
     );
 
-    const planes = [
-      { id_plan: 1, objetivo: "Mejorar tiempos de entrega en sprints" },
-      { id_plan: 2, objetivo: "Completar certificación de React" }
-    ];
+    const [planes] = await db.execute(
+      `SELECT id_plan, objetivo, fecha_limite, estado_cumplimiento
+   FROM planes_accion
+   WHERE id_empleado = ?
+   ORDER BY id_plan DESC`,
+      [idEmpleadoReal],
+    );
 
     res.status(200).json({
       empleado: empleado,
       evaluaciones: evaluaciones,
-      planes: planes
+      planes: planes,
     });
-
   } catch (error) {
     console.error("Error al cargar el dashboard del empleado:", error);
     res.status(500).json({ mensaje: "Error al cargar el dashboard." });
@@ -280,21 +286,20 @@ const obtenerMiPerfil = async (req, res) => {
       LEFT JOIN puestos p ON e.id_puesto = p.id_puesto
       LEFT JOIN departamentos d ON p.id_departamento = d.id_departamento
       WHERE u.id = ?`,
-      [idUsuario]
+      [idUsuario],
     );
 
     if (perfil.length === 0) {
       return res.status(404).json({
-        mensaje: "Perfil no encontrado."
+        mensaje: "Perfil no encontrado.",
       });
     }
 
     res.status(200).json(perfil[0]);
-
   } catch (error) {
     console.error(error);
     res.status(500).json({
-      mensaje: "Error al cargar el perfil."
+      mensaje: "Error al cargar el perfil.",
     });
   }
 };
@@ -306,14 +311,16 @@ const cambiarPassword = async (req, res) => {
   const { passwordActual, nuevaPassword } = req.body;
 
   if (!passwordActual || !nuevaPassword) {
-    return res.status(400).json({ mensaje: "Todos los campos son obligatorios." });
+    return res
+      .status(400)
+      .json({ mensaje: "Todos los campos son obligatorios." });
   }
 
   try {
     // 1. Buscamos el usuario actual en la base de datos
     const [usuarios] = await db.execute(
       "SELECT password FROM usuarios WHERE id = ?",
-      [idUsuario]
+      [idUsuario],
     );
 
     if (usuarios.length === 0) {
@@ -323,9 +330,14 @@ const cambiarPassword = async (req, res) => {
     const usuario = usuarios[0];
 
     // 2. Verificamos que la contraseña actual coincida con el hash
-    const esPasswordValida = await bcrypt.compare(passwordActual, usuario.password);
+    const esPasswordValida = await bcrypt.compare(
+      passwordActual,
+      usuario.password,
+    );
     if (!esPasswordValida) {
-      return res.status(400).json({ mensaje: "La contraseña actual es incorrecta." });
+      return res
+        .status(400)
+        .json({ mensaje: "La contraseña actual es incorrecta." });
     }
 
     // 3. Hasheamos la nueva contraseña (con un salt de 10)
@@ -333,15 +345,17 @@ const cambiarPassword = async (req, res) => {
     const hashedPassword = await bcrypt.hash(nuevaPassword, salt);
 
     // 4. Actualizamos en la tabla usuarios
-    await db.execute(
-      "UPDATE usuarios SET password = ? WHERE id = ?",
-      [hashedPassword, idUsuario]
-    );
+    await db.execute("UPDATE usuarios SET password = ? WHERE id = ?", [
+      hashedPassword,
+      idUsuario,
+    ]);
 
     res.status(200).json({ mensaje: "Contraseña actualizada exitosamente." });
   } catch (error) {
     console.error("Error al cambiar contraseña:", error);
-    res.status(500).json({ mensaje: "Error interno al cambiar la contraseña." });
+    res
+      .status(500)
+      .json({ mensaje: "Error interno al cambiar la contraseña." });
   }
 };
 
@@ -356,5 +370,5 @@ module.exports = {
   eliminarEmpleado,
   obtenerDashboard,
   obtenerMiPerfil,
-  cambiarPassword
+  cambiarPassword,
 };
