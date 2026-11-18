@@ -182,6 +182,32 @@ CREATE TABLE `feedback_ia_evaluaciones` (
   CONSTRAINT `feedback_ia_ibfk_2` FOREIGN KEY (`id_empleado`) REFERENCES `empleados` (`id_empleado`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+ -- 1. Agregar la columna para guardar el enlace de evidencia
+ALTER TABLE checkins_empleado
+ADD COLUMN link_evidencia VARCHAR(500) NULL;
+
+-- 2. Completar los registros anteriores
+UPDATE checkins_empleado
+SET link_evidencia = 'Registro anterior - sin evidencia'
+WHERE id_checkin > 0
+AND link_evidencia IS NULL;
+
+-- 3. Convertir la columna en obligatoria
+ALTER TABLE checkins_empleado
+MODIFY COLUMN link_evidencia VARCHAR(500) NOT NULL;
+
+CREATE TABLE IF NOT EXISTS notificaciones (
+    id_notificacion INT AUTO_INCREMENT PRIMARY KEY,
+    id_usuario INT NOT NULL,
+    titulo VARCHAR(150) NOT NULL,
+    mensaje TEXT NOT NULL,
+    tipo VARCHAR(50) NOT NULL,
+    leida TINYINT(1) DEFAULT 0,
+    fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+
+
 CREATE TABLE `historial_duelos_ia` (
   `id_duelo` int NOT NULL AUTO_INCREMENT,
   `id_admin` int NOT NULL,

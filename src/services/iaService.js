@@ -13,8 +13,10 @@ const generarAnalisisDuelo = async (empleadoA, empleadoB) => {
     }
 
     const prompt = `
-      Actúa como un Analista de Recursos Humanos Senior experto en evaluación de desempeño.
-      A continuación, te presentaré los datos de dos empleados evaluados para un posible ascenso.
+      Actúa como un Analista Senior de Recursos Humanos,
+      especializado en evaluación de desempeño y gestión de talento.
+
+      Analiza comparativamente los siguientes empleados:
 
       EMPLEADO A:
       ${JSON.stringify(empleadoA, null, 2)}
@@ -22,29 +24,139 @@ const generarAnalisisDuelo = async (empleadoA, empleadoB) => {
       EMPLEADO B:
       ${JSON.stringify(empleadoB, null, 2)}
 
-      Tu tarea:
-      1. Compara objetivamente a ambos empleados destacando fortalezas y debilidades.
-      2. Ten en cuenta los obstáculos reportados en sus check-ins.
-      3. Determina un ganador claro justificando tu decisión.
-      4. Propón un breve plan de acción para el que no fue seleccionado.
+      INSTRUCCIONES:
 
-      Responde en un formato profesional y estructurado. No uses saludos.
+      1. Compara objetivamente sus fortalezas y debilidades.
+      2. Analiza sus evaluaciones y tendencias de rendimiento.
+      3. Considera sus niveles de motivación y carga laboral.
+      4. Analiza los logros y obstáculos reportados.
+      5. Compara ambos perfiles según los datos disponibles.
+      6. Proporciona recomendaciones concretas para mejorar.
+      7. Redacta una conclusión indicando cuál candidato
+         presenta mejores condiciones según la evidencia.
+
+      IMPORTANTE:
+      - No inventes información.
+      - No supongas datos que no estén disponibles.
+      - Si faltan evaluaciones, indícalo.
+      - No confundas los puntajes ni los promedios.
+      - No consideres automáticamente que más tareas
+        significan mejor rendimiento.
+      - Ten en cuenta la sobrecarga laboral.
+      - La recomendación es orientativa, no una decisión definitiva.
+
+      Devuelve exclusivamente los datos solicitados
+      en la estructura JSON definida.
     `;
 
-    console.log(`[Groq IA] Enviando datos a ${MODELO}...`);
+    // Esquema obligatorio de respuesta
+    const esquemaDuelo = {
+      name: "analisis_duelo_empleados",
+      strict: true,
+      schema: {
+        type: "object",
+        properties: {
+          resumen: {
+            type: "string"
+          },
+          fortalezas_a: {
+            type: "array",
+            items: { type: "string" }
+          },
+          fortalezas_b: {
+            type: "array",
+            items: { type: "string" }
+          },
+          mejoras_a: {
+            type: "array",
+            items: { type: "string" }
+          },
+          mejoras_b: {
+            type: "array",
+            items: { type: "string" }
+          },
+          factores_comparados: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                factor: { type: "string" },
+                empleado_a: { type: "string" },
+                empleado_b: { type: "string" }
+              },
+              required: [
+                "factor",
+                "empleado_a",
+                "empleado_b"
+              ],
+              additionalProperties: false
+            }
+          },
+          recomendaciones: {
+            type: "array",
+            items: { type: "string" }
+          },
+          conclusion: {
+            type: "string"
+          }
+        },
+        required: [
+          "resumen",
+          "fortalezas_a",
+          "fortalezas_b",
+          "mejoras_a",
+          "mejoras_b",
+          "factores_comparados",
+          "recomendaciones",
+          "conclusion"
+        ],
+        additionalProperties: false
+      }
+    };
+
+    console.log(`[Groq IA] Generando duelo con ${MODELO}...`);
 
     const chatCompletion = await groq.chat.completions.create({
-      messages: [{ role: "user", content: prompt }],
       model: MODELO,
-      temperature: 0.7,
+      messages: [
+        {
+          role: "system",
+          content:
+            "Eres un analista de Recursos Humanos. " +
+            "Debes responder utilizando exclusivamente " +
+            "la estructura JSON solicitada."
+        },
+        {
+          role: "user",
+          content: prompt
+        }
+      ],
+      response_format: {
+        type: "json_schema",
+        json_schema: esquemaDuelo
+      },
+      temperature: 0.4
     });
 
-    console.log("[Groq IA] ¡Respuesta generada con éxito!");
-    return chatCompletion.choices[0].message.content;
+    const contenido = chatCompletion.choices[0]?.message?.content;
+
+    if (!contenido) {
+      throw new Error("La IA devolvió una respuesta vacía.");
+    }
+
+    // Convertimos el JSON recibido en objeto JavaScript
+    const analisis = JSON.parse(contenido);
+
+    console.log("[Groq IA] Análisis estructurado generado.");
+
+    return analisis;
+
   } catch (error) {
-    console.error("Error en la IA (Duelo Groq):", error);
+    console.error("[Groq IA] Error al generar el duelo:", error);
+
     throw new Error(
-      "No se pudo generar el análisis comparativo: " + (error.message || error),
+      "No se pudo generar el análisis comparativo: " +
+      (error.message || error)
     );
   }
 };

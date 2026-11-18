@@ -3,14 +3,14 @@ const router = express.Router();
 const userController = require("../controllers/userController");
 const notificacionController = require("../controllers/notificacionController");
 const evaluacionController = require("../controllers/evaluacionController");
-//const checkinController = require("../controllers/checkinController");
 const {
   registrarCheckin,
   obtenerCheckins,
+  eliminarCheckinAdmin,
 } = require("../controllers/checkinController");
-
 const metasController = require("../controllers/metasController");
 const dueloController = require("../controllers/dueloController");
+const adminController = require("../controllers/adminController");
 const {
   verificarToken,
   evaluarRolAdmin,
@@ -25,7 +25,7 @@ router.get(
   "/admin/estadisticas",
   verificarToken,
   evaluarRolAdmin,
-  userController.obtenerEstadisticas,
+  adminController.obtenerEstadisticas,
 );
 
 // Listado general de empleados y perfiles
@@ -74,6 +74,7 @@ router.put(
   verificarToken,
   userController.cambiarPassword,
 );
+
 // Duelos y Análisis Estratégico por IA
 router.post(
   "/admin/duelos/comparar",
@@ -86,6 +87,14 @@ router.get(
   verificarToken,
   evaluarRolAdmin,
   dueloController.obtenerHistorialDuelos,
+);
+
+// Eliminar un check-in desde el panel de administración (Ruta Admin)
+router.delete(
+  "/admin/checkins/:id",
+  verificarToken,
+  evaluarRolAdmin,
+  eliminarCheckinAdmin,
 );
 
 // ==========================================
@@ -101,13 +110,7 @@ router.get(
 router.get("/empleado/perfil", verificarToken, userController.obtenerMiPerfil);
 
 // Check-ins de estado de ánimo y progreso
-/*
-router.post('/empleado/checkin', verificarToken, checkinController.crearCheckin);
-router.get('/empleado/checkins', verificarToken, checkinController.obtenerMisCheckins);
-*/
-
 router.post("/empleado/checkin", verificarToken, registrarCheckin);
-
 router.get("/empleado/checkins", verificarToken, obtenerCheckins);
 
 // Metas y KPIs
@@ -117,23 +120,24 @@ router.put(
   verificarToken,
   metasController.actualizarProgresoMeta,
 );
+
 // NOTIFICACIONES DEL EMPLEADO
 router.get(
   "/empleado/notificaciones",
   verificarToken,
-  notificacionController.obtenerNotificaciones
+  notificacionController.obtenerNotificaciones,
 );
 
 router.put(
   "/empleado/notificaciones/:id/leida",
   verificarToken,
-  notificacionController.marcarNotificacionLeida
+  notificacionController.marcarNotificacionLeida,
 );
 
 router.put(
   "/empleado/notificaciones/leidas",
   verificarToken,
-  notificacionController.marcarTodasLeidas
+  notificacionController.marcarTodasLeidas,
 );
 
 module.exports = router;

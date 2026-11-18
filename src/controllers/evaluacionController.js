@@ -1,7 +1,7 @@
 const db = require("../config/db");
 const iaService = require("../services/iaService"); // Importamos el servicio de IA para generar feedback
 
-// Obtener detalle de un empleado, sus evaluaciones y su último check-in
+// Obtener detalle de un empleado, sus evaluaciones, su último check-in y el historial completo de check-ins
 const obtenerHistorialEmpleado = async (req, res) => {
   const { id } = req.params; // Aquí llega el id_empleado
 
@@ -41,15 +41,25 @@ const obtenerHistorialEmpleado = async (req, res) => {
       `SELECT nivel_motivacion, carga_trabajo, logros_semana, obstaculos, fecha 
        FROM checkins_empleado 
        WHERE id_empleado = ? 
-       ORDER BY fecha DESC LIMIT 1`,
+       ORDER BY id_checkin DESC LIMIT 1`,
       [idEmpleadoReal],
     );
 
-    // 4. Respondemos todo junto de manera limpia y sincronizada
+    // 📋 4. NUEVO: Buscamos el HISTORIAL COMPLETO de check-ins (incluyendo el link_evidencia) para la auditoría del admin
+    const [checkins] = await db.execute(
+      `SELECT id_checkin, nivel_motivacion, carga_trabajo, logros_semana, obstaculos, link_evidencia, fecha 
+       FROM checkins_empleado 
+       WHERE id_empleado = ? 
+       ORDER BY fecha DESC`,
+      [idEmpleadoReal],
+    );
+
+    // 5. Respondemos todo junto incluyendo la lista completa de check-ins
     return res.status(200).json({
       datos: empleadoFicha[0],
       evaluaciones: evaluaciones,
-      ultimoCheckin: ultimoCheckin[0] || null, // 👈 Ahora sí viaja el más reciente
+      checkins: checkins || [], // 👈 Enviamos la lista completa al frontend
+      ultimoCheckin: ultimoCheckin[0] || null, // El más reciente para referencia rápida
     });
   } catch (error) {
     console.error("Error al obtener historial:", error);
