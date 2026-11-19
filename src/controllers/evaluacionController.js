@@ -9,7 +9,7 @@ const obtenerHistorialEmpleado = async (req, res) => {
     // 1. Buscamos directamente por la tabla empleados y traemos los datos del usuario asociado
     const [empleadoFicha] = await db.execute(
       `SELECT 
-        u.id as id_usuario, u.nombre, u.apellido, u.email, u.creado_en, u.empresa,
+        u.id as id_usuario, u.nombre, u.apellido, u.email, u.creado_en, u.empresa, u.avatar_url,
         e.id_empleado, e.legajo, e.fecha_ingreso, e.id_puesto
       FROM empleados e
       LEFT JOIN usuarios u ON e.id_usuario = u.id
