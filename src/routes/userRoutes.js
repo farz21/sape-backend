@@ -27,6 +27,18 @@ router.get(
   evaluarRolAdmin,
   adminController.obtenerEstadisticas,
 );
+router.get(
+  "/admin/notificaciones",
+  verificarToken,
+  evaluarRolAdmin,
+  notificacionController.obtenerNotificaciones,
+);
+router.put(
+  "/admin/notificaciones/:id/leida",
+  verificarToken,
+  evaluarRolAdmin,
+  notificacionController.marcarNotificacionLeida,
+);
 
 // Listado general de empleados y perfiles
 router.get("/empleados", verificarToken, userController.obtenerEmpleados);
@@ -108,6 +120,7 @@ router.get(
   userController.obtenerDashboard,
 );
 router.get("/empleado/perfil", verificarToken, userController.obtenerMiPerfil);
+router.put("/empleado/perfil/avatar", verificarToken, userController.actualizarAvatar);
 
 // Check-ins de estado de ánimo y progreso
 router.post("/empleado/checkin", verificarToken, registrarCheckin);

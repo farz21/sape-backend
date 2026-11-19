@@ -234,6 +234,7 @@ const obtenerMiPerfil = async (req, res) => {
         u.apellido,
         u.email,
         u.empresa,
+        u.avatar_url,
         e.legajo,
         e.fecha_ingreso,
         p.nombre as puesto,
@@ -258,6 +259,32 @@ const obtenerMiPerfil = async (req, res) => {
     res.status(500).json({
       mensaje: "Error al cargar el perfil.",
     });
+  }
+};
+
+// Actualizar la URL de la foto del empleado autenticado
+const actualizarAvatar = async (req, res) => {
+  const { avatar_url } = req.body;
+  if (typeof avatar_url !== "string" || avatar_url.length > 500) {
+    return res.status(400).json({ mensaje: "La URL no puede superar 500 caracteres." });
+  }
+
+  let avatarUrlLimpia = avatar_url.trim();
+  if (avatarUrlLimpia) {
+    try {
+      const url = new URL(avatarUrlLimpia);
+      if (!["http:", "https:"].includes(url.protocol)) throw new Error("Protocolo invalido");
+    } catch {
+      return res.status(400).json({ mensaje: "Ingresá una URL valida que comience con http o https." });
+    }
+  }
+
+  try {
+    await db.execute("UPDATE usuarios SET avatar_url = ? WHERE id = ?", [avatarUrlLimpia || null, req.usuario.id]);
+    return res.status(200).json({ mensaje: "Foto de perfil actualizada.", avatar_url: avatarUrlLimpia || null });
+  } catch (error) {
+    console.error("Error al actualizar el avatar:", error);
+    return res.status(500).json({ mensaje: "No se pudo actualizar la foto de perfil." });
   }
 };
 
@@ -327,5 +354,6 @@ module.exports = {
   eliminarEmpleado,
   obtenerDashboard,
   obtenerMiPerfil,
+  actualizarAvatar,
   cambiarPassword,
 };
