@@ -19,9 +19,15 @@ const obtenerEmpleados = async (req, res) => {
         e.legajo,
         e.fecha_ingreso,
         e.id_puesto,
+        p.nombre AS nombre_puesto,
+        p.seniority,
+        p.id_departamento,
+        d.nombre AS nombre_departamento,
         e.en_periodo_prueba
       FROM usuarios u
       INNER JOIN empleados e ON u.id = e.id_usuario
+      LEFT JOIN puestos p ON e.id_puesto = p.id_puesto
+      LEFT JOIN departamentos d ON p.id_departamento = d.id_departamento
       WHERE u.rol = 'empleado'`,
     );
 
@@ -77,6 +83,8 @@ const crearEmpleado = async (req, res) => {
       ? 1
       : 0;
 
+  const emailLimpio = String(email).trim().toLowerCase();
+
   try {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
@@ -84,7 +92,7 @@ const crearEmpleado = async (req, res) => {
     // 1. Insertar en usuarios
     const [resultUser] = await db.execute(
       'INSERT INTO usuarios (nombre, apellido, email, password, empresa, rol) VALUES (?, ?, ?, ?, ?, "empleado")',
-      [nombre, apellido, email, hashedPassword, empresa || "S.A.P.E."],
+      [nombre.trim(), apellido.trim(), emailLimpio, hashedPassword, empresa || "S.A.P.E."],
     );
 
     const idUsuario = resultUser.insertId;
@@ -93,13 +101,12 @@ const crearEmpleado = async (req, res) => {
     try {
       await db.execute(
         "INSERT INTO empleados (id_usuario, legajo, fecha_ingreso, id_puesto, en_periodo_prueba) VALUES (?, ?, ?, ?, ?)",
-        [idUsuario, legajo, fecha_ingreso, id_puesto || 1, esPrueba],
+        [idUsuario, legajo.trim(), fecha_ingreso, Number(id_puesto) || 1, esPrueba],
       );
     } catch (errorEmpleado) {
       // Si falla la tabla empleados, borramos el usuario creado para mantener la consistencia
       await db.execute("DELETE FROM usuarios WHERE id = ?", [idUsuario]);
 
-      // Imprimimos el error real de MySQL en la consola para depurar fácil
       console.error(
         "Error técnico detallado en empleados:",
         errorEmpleado.message,
@@ -134,6 +141,7 @@ const actualizarEmpleado = async (req, res) => {
     email,
     legajo,
     fecha_ingreso,
+    id_puesto,
     condicion_laboral,
     en_periodo_prueba,
   } = req.body;
@@ -150,21 +158,36 @@ const actualizarEmpleado = async (req, res) => {
       : 0;
 
   try {
-    const [filasEmp] = await db.execute(
-      "SELECT id_usuario FROM empleados WHERE id_usuario = ? OR id_empleado = ? LIMIT 1",
-      [id, id],
+    // Priorizamos id_empleado (parámetro de ruta en /admin/empleados/editar/:id)
+    let [filasEmp] = await db.execute(
+      "SELECT id_empleado, id_usuario, id_puesto FROM empleados WHERE id_empleado = ? LIMIT 1",
+      [id],
     );
 
-    const idUsuario = filasEmp.length > 0 ? filasEmp[0].id_usuario : id;
+    if (filasEmp.length === 0) {
+      [filasEmp] = await db.execute(
+        "SELECT id_empleado, id_usuario, id_puesto FROM empleados WHERE id_usuario = ? LIMIT 1",
+        [id],
+      );
+    }
+
+    if (filasEmp.length === 0) {
+      return res.status(404).json({ mensaje: "Empleado no encontrado." });
+    }
+
+    const idEmpleadoReal = filasEmp[0].id_empleado;
+    const idUsuario = filasEmp[0].id_usuario;
+    const puestoFinal = id_puesto ? Number(id_puesto) : filasEmp[0].id_puesto || 1;
+    const emailLimpio = String(email || "").trim().toLowerCase();
 
     await db.execute(
       "UPDATE usuarios SET nombre = ?, apellido = ?, email = ? WHERE id = ?",
-      [nombre, apellido, email, idUsuario],
+      [String(nombre || "").trim(), String(apellido || "").trim(), emailLimpio, idUsuario],
     );
 
     await db.execute(
-      "UPDATE empleados SET legajo = ?, fecha_ingreso = ?, en_periodo_prueba = ? WHERE id_usuario = ?",
-      [legajo, fecha_ingreso, esPrueba, idUsuario],
+      "UPDATE empleados SET legajo = ?, fecha_ingreso = ?, id_puesto = ?, en_periodo_prueba = ? WHERE id_empleado = ?",
+      [String(legajo || "").trim(), fecha_ingreso, puestoFinal, esPrueba, idEmpleadoReal],
     );
 
     return res.status(200).json({
@@ -176,6 +199,12 @@ const actualizarEmpleado = async (req, res) => {
     if (error.code === "ER_DUP_ENTRY") {
       return res.status(400).json({
         mensaje: "Ese correo electrónico ya está en uso por otro usuario.",
+      });
+    }
+
+    if (error.code === "ER_NO_REFERENCED_ROW_2") {
+      return res.status(400).json({
+        mensaje: "El puesto seleccionado no existe en el sistema.",
       });
     }
 
@@ -192,17 +221,34 @@ const eliminarEmpleado = async (req, res) => {
   const { id } = req.params;
 
   try {
-    // Eliminar evaluaciones relacionadas
-    await db.execute(
-      "DELETE FROM evaluaciones WHERE id_empleado = (SELECT id_empleado FROM empleados WHERE id_usuario = ?)",
+    let [filasEmp] = await db.execute(
+      "SELECT id_empleado, id_usuario FROM empleados WHERE id_empleado = ? LIMIT 1",
       [id],
     );
 
-    // Eliminar empleado
-    await db.execute("DELETE FROM empleados WHERE id_usuario = ?", [id]);
+    if (filasEmp.length === 0) {
+      [filasEmp] = await db.execute(
+        "SELECT id_empleado, id_usuario FROM empleados WHERE id_usuario = ? LIMIT 1",
+        [id],
+      );
+    }
 
-    // Eliminar usuario
-    await db.execute("DELETE FROM usuarios WHERE id = ?", [id]);
+    if (filasEmp.length === 0) {
+      return res.status(404).json({ mensaje: "Empleado no encontrado." });
+    }
+
+    const idEmpleadoReal = filasEmp[0].id_empleado;
+    const idUsuario = filasEmp[0].id_usuario;
+
+    await db.execute("DELETE FROM evaluaciones WHERE id_empleado = ?", [
+      idEmpleadoReal,
+    ]);
+
+    await db.execute("DELETE FROM empleados WHERE id_empleado = ?", [
+      idEmpleadoReal,
+    ]);
+
+    await db.execute("DELETE FROM usuarios WHERE id = ?", [idUsuario]);
 
     res.status(200).json({
       mensaje: "Empleado eliminado del sistema.",
