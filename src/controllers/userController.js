@@ -13,11 +13,13 @@ const obtenerEmpleados = async (req, res) => {
         u.nombre,
         u.apellido,
         u.email,
+        u.avatar_url,
         u.creado_en,
         u.empresa,
         e.legajo,
         e.fecha_ingreso,
-        e.id_puesto
+        e.id_puesto,
+        e.en_periodo_prueba
       FROM usuarios u
       INNER JOIN empleados e ON u.id = e.id_usuario
       WHERE u.rol = 'empleado'`,
@@ -46,6 +48,8 @@ const crearEmpleado = async (req, res) => {
     legajo,
     fecha_ingreso,
     id_puesto,
+    condicion_laboral,
+    en_periodo_prueba,
   } = req.body;
 
   // Validar campos obligatorios que vienen del formulario
@@ -62,6 +66,17 @@ const crearEmpleado = async (req, res) => {
       .json({ mensaje: "Faltan campos obligatorios por completar." });
   }
 
+  const esPrueba =
+    condicion_laboral === "a_prueba" ||
+    condicion_laboral === true ||
+    condicion_laboral === 1 ||
+    condicion_laboral === "1" ||
+    en_periodo_prueba === true ||
+    en_periodo_prueba === 1 ||
+    en_periodo_prueba === "1"
+      ? 1
+      : 0;
+
   try {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
@@ -77,8 +92,8 @@ const crearEmpleado = async (req, res) => {
     // 2. Insertar en empleados ASEGURANDO guardar el id_usuario
     try {
       await db.execute(
-        "INSERT INTO empleados (id_usuario, legajo, fecha_ingreso, id_puesto) VALUES (?, ?, ?, ?)",
-        [idUsuario, legajo, fecha_ingreso, id_puesto || 1],
+        "INSERT INTO empleados (id_usuario, legajo, fecha_ingreso, id_puesto, en_periodo_prueba) VALUES (?, ?, ?, ?, ?)",
+        [idUsuario, legajo, fecha_ingreso, id_puesto || 1, esPrueba],
       );
     } catch (errorEmpleado) {
       // Si falla la tabla empleados, borramos el usuario creado para mantener la consistencia
@@ -113,25 +128,58 @@ const crearEmpleado = async (req, res) => {
 // ==========================================
 const actualizarEmpleado = async (req, res) => {
   const { id } = req.params;
-  const { nombre, apellido, email, legajo, fecha_ingreso } = req.body;
+  const {
+    nombre,
+    apellido,
+    email,
+    legajo,
+    fecha_ingreso,
+    condicion_laboral,
+    en_periodo_prueba,
+  } = req.body;
+
+  const esPrueba =
+    condicion_laboral === "a_prueba" ||
+    condicion_laboral === true ||
+    condicion_laboral === 1 ||
+    condicion_laboral === "1" ||
+    en_periodo_prueba === true ||
+    en_periodo_prueba === 1 ||
+    en_periodo_prueba === "1"
+      ? 1
+      : 0;
 
   try {
+    const [filasEmp] = await db.execute(
+      "SELECT id_usuario FROM empleados WHERE id_usuario = ? OR id_empleado = ? LIMIT 1",
+      [id, id],
+    );
+
+    const idUsuario = filasEmp.length > 0 ? filasEmp[0].id_usuario : id;
+
     await db.execute(
       "UPDATE usuarios SET nombre = ?, apellido = ?, email = ? WHERE id = ?",
-      [nombre, apellido, email, id],
+      [nombre, apellido, email, idUsuario],
     );
 
     await db.execute(
-      "UPDATE empleados SET legajo = ?, fecha_ingreso = ? WHERE id_usuario = ?",
-      [legajo, fecha_ingreso, id],
+      "UPDATE empleados SET legajo = ?, fecha_ingreso = ?, en_periodo_prueba = ? WHERE id_usuario = ?",
+      [legajo, fecha_ingreso, esPrueba, idUsuario],
     );
 
-    res.status(200).json({
+    return res.status(200).json({
       mensaje: "Empleado actualizado correctamente.",
     });
   } catch (error) {
     console.error("Error al actualizar empleado:", error);
-    res.status(500).json({
+
+    if (error.code === "ER_DUP_ENTRY") {
+      return res.status(400).json({
+        mensaje: "Ese correo electrónico ya está en uso por otro usuario.",
+      });
+    }
+
+    return res.status(500).json({
       mensaje: "Error al actualizar los datos.",
     });
   }
@@ -176,7 +224,7 @@ const obtenerDashboard = async (req, res) => {
   try {
     // 1. Buscamos al empleado asociado a este usuario
     const [empleadoRes] = await db.execute(
-      `SELECT e.id_empleado, u.nombre, u.apellido, u.email, u.empresa, e.legajo, e.fecha_ingreso
+      `SELECT e.id_empleado, u.nombre, u.apellido, u.email, u.empresa, e.legajo, e.fecha_ingreso, e.en_periodo_prueba
        FROM usuarios u
        INNER JOIN empleados e ON u.id = e.id_usuario
        WHERE u.id = ?`,
@@ -237,6 +285,7 @@ const obtenerMiPerfil = async (req, res) => {
         u.avatar_url,
         e.legajo,
         e.fecha_ingreso,
+        e.en_periodo_prueba,
         p.nombre as puesto,
         d.nombre as departamento
       FROM usuarios u

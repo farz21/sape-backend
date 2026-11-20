@@ -232,3 +232,8 @@ INSERT INTO `usuarios` (`nombre`, `apellido`, `email`, `empresa`, `password`, `r
 VALUES ('Administrador', 'SAPE', 'admin@sape.com', 'S.A.P.E.', '$2b$10$fhkReaURCLWuLCK0crNvYupvAxJGjiTTB5e2lvfKgzeRCHNvfzkeW', 'administrador');
 
 SET FOREIGN_KEY_CHECKS=1;
+
+ALTER TABLE usuarios ADD COLUMN avatar_url VARCHAR(500) NULL;
+
+ALTER TABLE `empleados`
+ADD COLUMN `en_periodo_prueba` TINYINT(1) NOT NULL DEFAULT 0 AFTER `fecha_ingreso`;
