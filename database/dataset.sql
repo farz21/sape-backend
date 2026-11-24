@@ -7,7 +7,6 @@ CREATE DATABASE IF NOT EXISTS `sape_db`
   COLLATE utf8mb4_0900_ai_ci;
 
 USE `sape_db`;
-
 -- ------------------------------------------
 -- 1. CREACIÓN DE TABLAS (en orden de FK)
 -- ------------------------------------------
@@ -30,15 +29,17 @@ CREATE TABLE `departamentos` (
   `id_departamento` int NOT NULL AUTO_INCREMENT,
   `nombre` varchar(100) NOT NULL,
   `presupuesto` decimal(12,2) DEFAULT NULL,
-  PRIMARY KEY (`id_departamento`)
+  PRIMARY KEY (`id_departamento`),
+  UNIQUE KEY `uq_departamentos_nombre` (`nombre`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `puestos` (
   `id_puesto` int NOT NULL AUTO_INCREMENT,
   `id_departamento` int NOT NULL,
   `nombre` varchar(100) NOT NULL,
-  `seniority` varchar(50) DEFAULT NULL,
+  `seniority` varchar(50) NOT NULL DEFAULT 'Junior',
   PRIMARY KEY (`id_puesto`),
+  UNIQUE KEY `uq_puestos_depto_nombre_seniority` (`id_departamento`, `nombre`, `seniority`),
   KEY `id_departamento` (`id_departamento`),
   CONSTRAINT `puestos_ibfk_1` FOREIGN KEY (`id_departamento`) REFERENCES `departamentos` (`id_departamento`) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
@@ -216,7 +217,7 @@ CREATE TABLE `notificaciones` (
 -- Contraseña admin: admin123
 -- ------------------------------------------
 
-SET @PASS_EMP = '$2b$10$w5bY5x7mK3nR8vL2pQ9zOeA1dF6gH4jC0bN7mK3vX8yZ2wQ5tR1uS';
+SET @PASS_EMP = '$2b$10$dnhFJV1QyuCMsoMBCEWRJe9HmTwqS9OpG7yseUf1poyrF2OkMfHeG';
 
 INSERT INTO `usuarios` (`id`, `nombre`, `apellido`, `email`, `empresa`, `password`, `rol`, `creado_en`, `avatar_url`) VALUES
 (1, 'Administrador', 'SAPE', 'admin@sape.com', 'S.A.P.E.', '$2b$10$BMnSUnDm7sAoMPgB0ZbKVeobnHqpuFJGJTrErPDJbP2QZ5zoYcRcS', 'administrador', '2026-11-11 19:05:39', NULL), 
