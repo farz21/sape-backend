@@ -12,6 +12,19 @@ const metasController = require("../controllers/metasController");
 const dueloController = require("../controllers/dueloController");
 const adminController = require("../controllers/adminController");
 const {
+  obtenerDepartamentos,
+  crearDepartamento,
+  actualizarDepartamento,
+  eliminarDepartamento,
+  obtenerPuestos,
+  crearPuesto,
+  actualizarPuesto,
+  eliminarPuesto,
+} = require("../controllers/puestoController");
+const {
+  obtenerMisProyectos,
+} = require("../controllers/proyectoEmpleadoController");
+const {
   verificarToken,
   evaluarRolAdmin,
 } = require("../middlewares/authMiddleware");
@@ -39,6 +52,33 @@ router.put(
   evaluarRolAdmin,
   notificacionController.marcarNotificacionLeida,
 );
+
+// Departamentos (lectura autenticada; CRUD completo solo admin)
+router.get("/departamentos", verificarToken, obtenerDepartamentos);
+router.post(
+  "/departamentos",
+  verificarToken,
+  evaluarRolAdmin,
+  crearDepartamento,
+);
+router.put(
+  "/departamentos/:id",
+  verificarToken,
+  evaluarRolAdmin,
+  actualizarDepartamento,
+);
+router.delete(
+  "/departamentos/:id",
+  verificarToken,
+  evaluarRolAdmin,
+  eliminarDepartamento,
+);
+
+// Puestos (lectura autenticada; CRUD completo solo admin)
+router.get("/puestos", verificarToken, obtenerPuestos);
+router.post("/puestos", verificarToken, evaluarRolAdmin, crearPuesto);
+router.put("/puestos/:id", verificarToken, evaluarRolAdmin, actualizarPuesto);
+router.delete("/puestos/:id", verificarToken, evaluarRolAdmin, eliminarPuesto);
 
 // Listado general de empleados y perfiles
 router.get("/empleados", verificarToken, userController.obtenerEmpleados);
@@ -100,6 +140,18 @@ router.get(
   evaluarRolAdmin,
   dueloController.obtenerHistorialDuelos,
 );
+router.get(
+  "/admin/duelos/:id",
+  verificarToken,
+  evaluarRolAdmin,
+  dueloController.obtenerDueloPorId,
+);
+router.delete(
+  "/admin/duelos/:id",
+  verificarToken,
+  evaluarRolAdmin,
+  dueloController.eliminarDuelo,
+);
 
 // Eliminar un check-in desde el panel de administración (Ruta Admin)
 router.delete(
@@ -120,7 +172,12 @@ router.get(
   userController.obtenerDashboard,
 );
 router.get("/empleado/perfil", verificarToken, userController.obtenerMiPerfil);
-router.put("/empleado/perfil/avatar", verificarToken, userController.actualizarAvatar);
+router.put(
+  "/empleado/perfil/avatar",
+  verificarToken,
+  userController.actualizarAvatar,
+);
+router.get("/empleado/proyectos", verificarToken, obtenerMisProyectos);
 
 // Check-ins de estado de ánimo y progreso
 router.post("/empleado/checkin", verificarToken, registrarCheckin);
