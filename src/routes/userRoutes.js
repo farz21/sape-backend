@@ -1,51 +1,41 @@
 const express = require("express");
 const router = express.Router();
+
 const userController = require("../controllers/userController");
 const notificacionController = require("../controllers/notificacionController");
 const evaluacionController = require("../controllers/evaluacionController");
+const metasController = require("../controllers/metasController");
+const proyectoController = require("../controllers/proyectoController");
+const dueloController = require("../controllers/dueloController");
+const adminController = require("../controllers/adminController");
+
 const {
   registrarCheckin,
   obtenerCheckins,
   eliminarCheckinAdmin,
 } = require("../controllers/checkinController");
-const metasController = require("../controllers/metasController");
-const dueloController = require("../controllers/dueloController");
-const adminController = require("../controllers/adminController");
-const {
-  obtenerDepartamentos,
-  crearDepartamento,
-  actualizarDepartamento,
-  eliminarDepartamento,
-  obtenerPuestos,
-  crearPuesto,
-  actualizarPuesto,
-  eliminarPuesto,
-} = require("../controllers/puestoController");
-const {
-  obtenerMisProyectos,
-} = require("../controllers/proyectoEmpleadoController");
+
 const {
   verificarToken,
   evaluarRolAdmin,
 } = require("../middlewares/authMiddleware");
 
-// ==========================================
 // RUTAS DEL ADMINISTRADOR
-// ==========================================
 
-// Estadísticas del Dashboard Admin
 router.get(
   "/admin/estadisticas",
   verificarToken,
   evaluarRolAdmin,
   adminController.obtenerEstadisticas,
 );
+
 router.get(
   "/admin/notificaciones",
   verificarToken,
   evaluarRolAdmin,
   notificacionController.obtenerNotificaciones,
 );
+
 router.put(
   "/admin/notificaciones/:id/leida",
   verificarToken,
@@ -53,48 +43,115 @@ router.put(
   notificacionController.marcarNotificacionLeida,
 );
 
-// Departamentos (lectura autenticada; CRUD completo solo admin)
-router.get("/departamentos", verificarToken, obtenerDepartamentos);
+// GESTION DE METAS
+
+router.get(
+  "/admin/metas",
+  verificarToken,
+  evaluarRolAdmin,
+  metasController.obtenerMetasAdmin,
+);
+
 router.post(
-  "/departamentos",
+  "/admin/metas",
   verificarToken,
   evaluarRolAdmin,
-  crearDepartamento,
+  metasController.crearMetaAdmin,
 );
+
 router.put(
-  "/departamentos/:id",
+  "/admin/metas/:id",
   verificarToken,
   evaluarRolAdmin,
-  actualizarDepartamento,
+  metasController.actualizarMetaAdmin,
 );
+
 router.delete(
-  "/departamentos/:id",
+  "/admin/metas/:id",
   verificarToken,
   evaluarRolAdmin,
-  eliminarDepartamento,
+  metasController.eliminarMetaAdmin,
 );
 
-// Puestos (lectura autenticada; CRUD completo solo admin)
-router.get("/puestos", verificarToken, obtenerPuestos);
-router.post("/puestos", verificarToken, evaluarRolAdmin, crearPuesto);
-router.put("/puestos/:id", verificarToken, evaluarRolAdmin, actualizarPuesto);
-router.delete("/puestos/:id", verificarToken, evaluarRolAdmin, eliminarPuesto);
+// GESTION DE PROYECTOS
 
-// Listado general de empleados y perfiles
+router.get(
+  "/admin/proyectos",
+  verificarToken,
+  evaluarRolAdmin,
+  proyectoController.obtenerProyectos,
+);
+
+router.post(
+  "/admin/proyectos",
+  verificarToken,
+  evaluarRolAdmin,
+  proyectoController.crearProyecto,
+);
+
+router.put(
+  "/admin/proyectos/:id",
+  verificarToken,
+  evaluarRolAdmin,
+  proyectoController.actualizarProyecto,
+);
+
+router.delete(
+  "/admin/proyectos/:id",
+  verificarToken,
+  evaluarRolAdmin,
+  proyectoController.eliminarProyecto,
+);
+
+// GESTION DE ASIGNACIONES
+
+router.get(
+  "/admin/asignaciones",
+  verificarToken,
+  evaluarRolAdmin,
+  proyectoController.obtenerAsignaciones,
+);
+
+router.post(
+  "/admin/asignaciones",
+  verificarToken,
+  evaluarRolAdmin,
+  proyectoController.crearAsignacion,
+);
+
+router.put(
+  "/admin/asignaciones/:id",
+  verificarToken,
+  evaluarRolAdmin,
+  proyectoController.actualizarAsignacion,
+);
+
+router.delete(
+  "/admin/asignaciones/:id",
+  verificarToken,
+  evaluarRolAdmin,
+  proyectoController.eliminarAsignacion,
+);
+
+// LISTADO Y DETALLE DE EMPLEADOS
+
 router.get("/empleados", verificarToken, userController.obtenerEmpleados);
+
 router.get(
   "/empleados/:id",
   verificarToken,
   evaluacionController.obtenerHistorialEmpleado,
 );
 
-// Gestión de Evaluaciones
+// EVALUACIONES
+
 router.post(
   "/evaluaciones",
   verificarToken,
   evaluarRolAdmin,
   evaluacionController.crearEvaluacion,
 );
+
 router.delete(
   "/evaluaciones/:id",
   verificarToken,
@@ -102,58 +159,53 @@ router.delete(
   evaluacionController.eliminarEvaluacion,
 );
 
-// CRUD de Empleados
+// CRUD DE EMPLEADOS
+
 router.post(
   "/empleados",
   verificarToken,
   evaluarRolAdmin,
   userController.crearEmpleado,
 );
+
 router.put(
   "/empleados/:id",
   verificarToken,
   evaluarRolAdmin,
   userController.actualizarEmpleado,
 );
+
 router.delete(
   "/empleados/:id",
   verificarToken,
   evaluarRolAdmin,
   userController.eliminarEmpleado,
 );
+
 router.put(
   "/empleado/cambiar-password",
   verificarToken,
   userController.cambiarPassword,
 );
 
-// Duelos y Análisis Estratégico por IA
+// DUELOS CON IA
+
 router.post(
   "/admin/duelos/comparar",
   verificarToken,
   evaluarRolAdmin,
   dueloController.compararEmpleados,
 );
+
 router.get(
   "/admin/duelos/historial",
   verificarToken,
   evaluarRolAdmin,
   dueloController.obtenerHistorialDuelos,
 );
-router.get(
-  "/admin/duelos/:id",
-  verificarToken,
-  evaluarRolAdmin,
-  dueloController.obtenerDueloPorId,
-);
-router.delete(
-  "/admin/duelos/:id",
-  verificarToken,
-  evaluarRolAdmin,
-  dueloController.eliminarDuelo,
-);
 
-// Eliminar un check-in desde el panel de administración (Ruta Admin)
+// CHECK-INS ADMIN
+
 router.delete(
   "/admin/checkins/:id",
   verificarToken,
@@ -161,37 +213,50 @@ router.delete(
   eliminarCheckinAdmin,
 );
 
-// ==========================================
 // RUTAS DEL EMPLEADO
-// ==========================================
 
-// Vistas base
 router.get(
   "/empleado/dashboard",
   verificarToken,
   userController.obtenerDashboard,
 );
-router.get("/empleado/perfil", verificarToken, userController.obtenerMiPerfil);
+
+router.get(
+  "/empleado/perfil",
+  verificarToken,
+  userController.obtenerMiPerfil,
+);
+
 router.put(
   "/empleado/perfil/avatar",
   verificarToken,
   userController.actualizarAvatar,
 );
-router.get("/empleado/proyectos", verificarToken, obtenerMisProyectos);
 
-// Check-ins de estado de ánimo y progreso
-router.post("/empleado/checkin", verificarToken, registrarCheckin);
-router.get("/empleado/checkins", verificarToken, obtenerCheckins);
+router.post(
+  "/empleado/checkin",
+  verificarToken,
+  registrarCheckin,
+);
 
-// Metas y KPIs
-router.get("/empleado/metas", verificarToken, metasController.obtenerMisMetas);
+router.get(
+  "/empleado/checkins",
+  verificarToken,
+  obtenerCheckins,
+);
+
+router.get(
+  "/empleado/metas",
+  verificarToken,
+  metasController.obtenerMisMetas,
+);
+
 router.put(
   "/empleado/metas/:id/progreso",
   verificarToken,
   metasController.actualizarProgresoMeta,
 );
 
-// NOTIFICACIONES DEL EMPLEADO
 router.get(
   "/empleado/notificaciones",
   verificarToken,
