@@ -1,7 +1,7 @@
 const db = require("../config/db");
 const iaService = require("../services/iaService"); // Importamos el servicio de IA para generar feedback
 
-// Obtener detalle de un empleado, sus evaluaciones, su último check-in y el historial completo de check-ins
+// Obtener detalle de un empleado, sus evaluaciones (con competencias de detalle_eval), su último check-in y el historial completo de check-ins
 const obtenerHistorialEmpleado = async (req, res) => {
   const { id } = req.params;
 
@@ -48,6 +48,42 @@ const obtenerHistorialEmpleado = async (req, res) => {
       ORDER BY ev.fecha DESC`,
       [idEmpleadoReal],
     );
+
+    const [detallesEval] = await db.execute(
+      `SELECT
+        d.id_detalle,
+        d.id_evaluacion,
+        d.id_competencia,
+        c.nombre AS competencia,
+        c.tipo_skill,
+        d.puntaje_obtenido,
+        d.justificacion
+       FROM detalle_eval d
+       INNER JOIN competencias c ON d.id_competencia = c.id_competencia
+       INNER JOIN evaluaciones ev ON d.id_evaluacion = ev.id_evaluacion
+       WHERE ev.id_empleado = ?
+       ORDER BY d.id_detalle ASC`,
+      [idEmpleadoReal],
+    );
+
+    const detallesPorEvaluacion = new Map();
+    for (const det of detallesEval) {
+      const lista = detallesPorEvaluacion.get(det.id_evaluacion) || [];
+      lista.push({
+        id_detalle: det.id_detalle,
+        id_competencia: det.id_competencia,
+        competencia: det.competencia,
+        tipo_skill: det.tipo_skill,
+        puntaje_obtenido: Number(det.puntaje_obtenido),
+        justificacion: det.justificacion,
+      });
+      detallesPorEvaluacion.set(det.id_evaluacion, lista);
+    }
+
+    const evaluacionesConDetalles = evaluaciones.map((ev) => ({
+      ...ev,
+      detalles: detallesPorEvaluacion.get(ev.id_evaluacion) || [],
+    }));
 
     const [ultimoCheckin] = await db.execute(
       `SELECT
@@ -109,7 +145,7 @@ const obtenerHistorialEmpleado = async (req, res) => {
 
     return res.status(200).json({
       datos: empleadoFicha[0],
-      evaluaciones,
+      evaluaciones: evaluacionesConDetalles,
       metas,
       planes,
       checkins,
@@ -124,9 +160,9 @@ const obtenerHistorialEmpleado = async (req, res) => {
   }
 };
 
-// Registrar una nueva evaluación y generar planes automáticamente
+// Registrar una nueva evaluación, guardar detalle_eval y generar planes automáticamente
 const crearEvaluacion = async (req, res) => {
-  const { id_empleado, periodo, puntaje_final, semaforo } = req.body;
+  const { id_empleado, periodo, puntaje_final, semaforo, detalles } = req.body;
   const id_evaluador = req.usuario.id;
   const fecha = new Date().toISOString().split("T")[0];
 
@@ -147,34 +183,90 @@ const crearEvaluacion = async (req, res) => {
     const idEmpleadoReal = empCheck[0].id_empleado;
     const idUsuarioEmpleado = empCheck[0].id_usuario;
 
+    // Validar y preparar detalles por competencia si vienen en el payload
+    const detallesValidos = Array.isArray(detalles)
+      ? detalles
+          .filter(
+            (item) =>
+              item &&
+              item.id_competencia &&
+              item.puntaje_obtenido !== undefined &&
+              item.puntaje_obtenido !== null &&
+              !Number.isNaN(Number(item.puntaje_obtenido)),
+          )
+          .map((item) => ({
+            id_competencia: Number(item.id_competencia),
+            puntaje_obtenido: Number(item.puntaje_obtenido),
+            justificacion: String(item.justificacion || "").trim(),
+          }))
+      : [];
+
+    // Si no se envió puntaje_final pero sí detalles válidos, calcular promedio
+    let puntajeCalculado = puntaje_final;
+    if (
+      (puntajeCalculado === undefined ||
+        puntajeCalculado === null ||
+        puntajeCalculado === "") &&
+      detallesValidos.length > 0
+    ) {
+      const suma = detallesValidos.reduce(
+        (acc, d) => acc + d.puntaje_obtenido,
+        0,
+      );
+      puntajeCalculado = Number((suma / detallesValidos.length).toFixed(2));
+    }
+
     // 2. Guardar la evaluación
     const [resultado] = await db.execute(
       `INSERT INTO evaluaciones
        (id_empleado, id_evaluador, fecha, periodo, puntaje_final, semaforo)
        VALUES (?, ?, ?, ?, ?, ?)`,
-      [idEmpleadoReal, id_evaluador, fecha, periodo, puntaje_final, semaforo],
+      [
+        idEmpleadoReal,
+        id_evaluador,
+        fecha,
+        periodo,
+        puntajeCalculado,
+        semaforo,
+      ],
     );
 
     const idEvaluacionGenerada = resultado.insertId;
+
+    // 2b. Guardar detalle por competencia en detalle_eval
+    for (const det of detallesValidos) {
+      await db.execute(
+        `INSERT INTO detalle_eval
+         (id_evaluacion, id_competencia, puntaje_obtenido, justificacion)
+         VALUES (?, ?, ?, ?)`,
+        [
+          idEvaluacionGenerada,
+          det.id_competencia,
+          det.puntaje_obtenido,
+          det.justificacion,
+        ],
+      );
+    }
+
     // Notificar al empleado sobre la nueva evaluación
-try {
-  await db.execute(
-    `INSERT INTO notificaciones
-     (id_usuario, titulo, mensaje, tipo)
-     VALUES (?, ?, ?, ?)`,
-    [
-      idUsuarioEmpleado,
-      "Nueva evaluación",
-      `Se registró una nueva evaluación correspondiente al período ${periodo}. Ya podés consultar los resultados en SAPE.`,
-      "evaluacion"
-    ]
-  );
-} catch (errorNotificacion) {
-  console.error(
-    "No se pudo crear la notificación de evaluación:",
-    errorNotificacion
-  );
-}
+    try {
+      await db.execute(
+        `INSERT INTO notificaciones
+         (id_usuario, titulo, mensaje, tipo)
+         VALUES (?, ?, ?, ?)`,
+        [
+          idUsuarioEmpleado,
+          "Nueva evaluación",
+          `Se registró una nueva evaluación correspondiente al período ${periodo}. Ya podés consultar los resultados en SAPE.`,
+          "evaluacion",
+        ],
+      );
+    } catch (errorNotificacion) {
+      console.error(
+        "No se pudo crear la notificación de evaluación:",
+        errorNotificacion,
+      );
+    }
 
     // Datos que se utilizarán para las dos funciones de IA
     let checkins = [];
@@ -204,14 +296,15 @@ try {
       );
 
       if (infoUsuario.length > 0) {
-        nombreCompleto = `${infoUsuario[0].nombre} ${infoUsuario[0].apellido}`;
+        nombreCompleto = `${infoUsuario[0].nombre}${infoUsuario[0].apellido}`;
       }
 
       const evaluacionAdmin = {
         nombre_empleado: nombreCompleto,
         periodo,
-        puntaje_final,
+        puntaje_final: puntajeCalculado,
         semaforo,
+        competencias_evaluadas: detallesValidos,
       };
 
       feedbackGenerado = await iaService.generarFeedbackEvaluacion(
@@ -239,9 +332,10 @@ try {
       const evaluacionParaIA = {
         nombre_empleado: nombreCompleto,
         periodo,
-        puntaje_final,
+        puntaje_final: puntajeCalculado,
         semaforo,
         fecha,
+        competencias_evaluadas: detallesValidos,
       };
 
       const objetivos = await iaService.generarPlanesAccion(
@@ -263,7 +357,7 @@ try {
         ].join("-");
 
         // Guardar el plan vinculado a la evaluación
-        const objetivoCompleto = `${objetivo.titulo}: ${objetivo.descripcion}`;
+        const objetivoCompleto = `${objetivo.titulo}:${objetivo.descripcion}`;
 
         await db.execute(
           `INSERT INTO planes_accion
@@ -294,10 +388,10 @@ try {
 
         cantidadPlanes++;
       }
-       } catch (errorPlanes) {
+    } catch (errorPlanes) {
       console.error(
         "Advertencia: la evaluación se guardó, pero no se pudieron generar todos los planes:",
-        errorPlanes
+        errorPlanes,
       );
     }
 
@@ -312,21 +406,22 @@ try {
             idUsuarioEmpleado,
             "Nuevos planes de acción",
             `Se generaron ${cantidadPlanes} objetivos personalizados para ayudarte a mejorar tu desempeño. Ya podés consultarlos en la sección Mis metas.`,
-            "meta"
-          ]
+            "meta",
+          ],
         );
       } catch (errorNotificacion) {
         console.error(
           "No se pudo crear la notificación de planes:",
-          errorNotificacion
+          errorNotificacion,
         );
       }
     }
 
-    // 6. Responder al administrador
+    // 7. Responder al administrador
     return res.status(201).json({
       mensaje: "Evaluación registrada correctamente.",
       id_evaluacion: idEvaluacionGenerada,
+      detalles_guardados: detallesValidos.length,
       feedback_generado: Boolean(feedbackGenerado),
       planes_generados: cantidadPlanes,
     });

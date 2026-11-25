@@ -10,7 +10,7 @@ const dueloController = require("../controllers/dueloController");
 const adminController = require("../controllers/adminController");
 const puestoController = require("../controllers/puestoController");
 const proyectoEmpleadoController = require("../controllers/proyectoEmpleadoController");
-
+const competenciaController = require("../controllers/competenciaController");
 const {
   registrarCheckin,
   obtenerCheckins,
@@ -191,6 +191,34 @@ router.delete(
   verificarToken,
   evaluarRolAdmin,
   proyectoController.eliminarAsignacion,
+);
+
+// GESTION DE COMPETENCIAS
+router.get(
+  "/competencias",
+  verificarToken,
+  competenciaController.obtenerCompetencias,
+);
+
+router.post(
+  "/competencias",
+  verificarToken,
+  evaluarRolAdmin,
+  competenciaController.crearCompetencia,
+);
+
+router.put(
+  "/competencias/:id",
+  verificarToken,
+  evaluarRolAdmin,
+  competenciaController.actualizarCompetencia,
+);
+
+router.delete(
+  "/competencias/:id",
+  verificarToken,
+  evaluarRolAdmin,
+  competenciaController.eliminarCompetencia,
 );
 
 // CRUD DE EMPLEADOS
