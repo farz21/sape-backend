@@ -217,7 +217,7 @@ CREATE TABLE `notificaciones` (
 -- Contraseña admin: admin123
 -- ------------------------------------------
 
-SET @PASS_EMP = '$2b$10$JS9VQSO/c5AZKaP.Jbbo5Oo/1./44QTygSfmtcni.z2n2RgO5zUru';
+SET @PASS_EMP = '$2b$10$dnhFJV1QyuCMsoMBCEWRJe9HmTwqS9OpG7yseUf1poyrF2OkMfHeG';
 
 INSERT INTO `usuarios` (`id`, `nombre`, `apellido`, `email`, `empresa`, `password`, `rol`, `creado_en`, `avatar_url`) VALUES
 (1, 'Administrador', 'SAPE', 'admin@sape.com', 'S.A.P.E.', '$2b$10$BMnSUnDm7sAoMPgB0ZbKVeobnHqpuFJGJTrErPDJbP2QZ5zoYcRcS', 'administrador', '2026-11-11 19:05:39', NULL), 
