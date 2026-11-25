@@ -30,15 +30,17 @@ CREATE TABLE `departamentos` (
   `id_departamento` int NOT NULL AUTO_INCREMENT,
   `nombre` varchar(100) NOT NULL,
   `presupuesto` decimal(12,2) DEFAULT NULL,
-  PRIMARY KEY (`id_departamento`)
+  PRIMARY KEY (`id_departamento`),
+  UNIQUE KEY `uq_departamentos_nombre` (`nombre`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `puestos` (
   `id_puesto` int NOT NULL AUTO_INCREMENT,
   `id_departamento` int NOT NULL,
   `nombre` varchar(100) NOT NULL,
-  `seniority` varchar(50) DEFAULT NULL,
+  `seniority` varchar(50) NOT NULL DEFAULT 'Junior',
   PRIMARY KEY (`id_puesto`),
+  UNIQUE KEY `uq_puestos_depto_nombre_seniority` (`id_departamento`, `nombre`, `seniority`),
   KEY `id_departamento` (`id_departamento`),
   CONSTRAINT `puestos_ibfk_1` FOREIGN KEY (`id_departamento`) REFERENCES `departamentos` (`id_departamento`) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
@@ -47,7 +49,8 @@ CREATE TABLE `competencias` (
   `id_competencia` int NOT NULL AUTO_INCREMENT,
   `nombre` varchar(100) NOT NULL,
   `tipo_skill` varchar(50) NOT NULL,
-  PRIMARY KEY (`id_competencia`)
+  PRIMARY KEY (`id_competencia`),
+  UNIQUE KEY `uq_competencias_nombre` (`nombre`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `proyectos` (
@@ -80,6 +83,7 @@ CREATE TABLE `asignaciones` (
   `horas_asignadas` int DEFAULT NULL,
   `rol_en_proyecto` varchar(100) DEFAULT NULL,
   PRIMARY KEY (`id_asignacion`),
+  UNIQUE KEY `uq_asignacion_empleado_proyecto` (`id_empleado`, `id_proyecto`),
   KEY `id_empleado` (`id_empleado`),
   KEY `id_proyecto` (`id_proyecto`),
   CONSTRAINT `asignaciones_ibfk_1` FOREIGN KEY (`id_empleado`) REFERENCES `empleados` (`id_empleado`) ON DELETE CASCADE,
@@ -99,8 +103,8 @@ CREATE TABLE `checkins_empleado` (
   PRIMARY KEY (`id_checkin`),
   KEY `idx_checkins_empleado` (`id_empleado`),
   CONSTRAINT `checkins_ibfk_1` FOREIGN KEY (`id_empleado`) REFERENCES `empleados` (`id_empleado`) ON DELETE CASCADE,
-  CONSTRAINT `validar_carga_trabajo` CHECK (((`carga_trabajo` between 1 and 5) and (`carga_trabajo` = floor(`carga_trabajo`)))),
-  CONSTRAINT `validar_nivel_motivacion` CHECK (((`nivel_motivacion` between 1 and 5) and (`nivel_motivacion` = floor(`nivel_motivacion`))))
+  CONSTRAINT `validar_carga_trabajo` CHECK ((`carga_trabajo` between 1 and 5)),
+  CONSTRAINT `validar_nivel_motivacion` CHECK ((`nivel_motivacion` between 1 and 5))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `evaluaciones` (
@@ -216,10 +220,10 @@ CREATE TABLE `notificaciones` (
 -- Contraseña admin: admin123
 -- ------------------------------------------
 
-SET @PASS_EMP = '$2b$10$w5bY5x7mK3nR8vL2pQ9zOeA1dF6gH4jC0bN7mK3vX8yZ2wQ5tR1uS';
+SET @PASS_EMP = '$2b$10$dnhFJV1QyuCMsoMBCEWRJe9HmTwqS9OpG7yseUf1poyrF2OkMfHeG';
 
 INSERT INTO `usuarios` (`id`, `nombre`, `apellido`, `email`, `empresa`, `password`, `rol`, `creado_en`, `avatar_url`) VALUES
-(1, 'Administrador', 'SAPE', 'admin@sape.com', 'S.A.P.E.', '$2b$10$BMnSUnDm7sAoMPgB0ZbKVeobnHqpuFJGJTrErPDJbP2QZ5zoYcRcS', 'administrador', '2026-11-11 19:05:39', NULL), 
+(1, 'Administrador', 'SAPE', 'admin@sape.com', 'S.A.P.E.', '$2b$10$BMnSUnDm7sAoMPgB0ZbKVeobnHqpuFJGJTrErPDJbP2QZ5zoYcRcS', 'administrador', '2026-11-11 19:05:39', NULL),
 (2, 'Lucas', 'Mendoza', 'lucas.mendoza@sape.com', 'S.A.P.E.', @PASS_EMP, 'empleado', '2026-11-18 08:00:00', NULL),
 (3, 'Valentina', 'Ríos', 'valentina.rios@sape.com', 'S.A.P.E.', @PASS_EMP, 'empleado', '2026-11-18 08:01:00', NULL),
 (4, 'Mateo', 'Silva', 'mateo.silva@sape.com', 'S.A.P.E.', @PASS_EMP, 'empleado', '2026-11-18 08:02:00', NULL),
@@ -369,8 +373,8 @@ INSERT INTO `evaluaciones` (`id_evaluacion`, `id_empleado`, `id_evaluador`, `fec
 (2, 1, 1, '2026-11-18', 'Noviembre 2026', 90.00, 'Verde', 0),
 (3, 2, 1, '2026-10-30', 'Octubre 2026', 82.00, 'Verde', 0),
 (4, 2, 1, '2026-11-18', 'Noviembre 2026', 86.00, 'Verde', 0),
-(5, 3, 1, '2026-11-18', 'Noviembre 2026', 58.00, 'Amarillo', 0),
-(6, 4, 1, '2026-11-18', 'Noviembre 2026', 78.00, 'Verde', 0),
+(5, 3, 1, '2026-11-18', 'Noviembre 2026', 58.00, 'Rojo', 0),
+(6, 4, 1, '2026-11-18', 'Noviembre 2026', 78.00, 'Amarillo', 0),
 (7, 5, 1, '2026-11-18', 'Noviembre 2026', 92.00, 'Verde', 0),
 (8, 41, 1, '2026-11-19', 'Noviembre 2026', 45.00, 'Rojo', 1);
 
@@ -385,7 +389,7 @@ INSERT INTO `feedback_ia_evaluaciones` (`id_feedback`, `id_evaluacion`, `id_empl
 (1, 1, 1, 'Lucas Mendoza mantiene un desempeño sólido en octubre con 85 puntos (semáforo verde). Se destaca la entrega consistente de vistas y buena comunicación.', 'Mantener el ritmo de entregas y documentar componentes.', '2026-10-30 20:00:00'),
 (2, 2, 1, 'En noviembre Lucas elevó su puntaje a 90 puntos (semáforo verde), consolidando mejoras en filtros y reportes.', 'Consolidar buenas prácticas de UI y apoyar en revisiones.', '2026-11-18 19:00:00'),
 (3, 3, 2, 'Valentina Ríos obtuvo 82 puntos en octubre (semáforo verde), con buen rendimiento en endpoints y validación JWT.', 'Sostener cobertura de pruebas en rutas críticas.', '2026-10-30 20:15:00'),
-(4, 5, 3, 'Mateo Silva registró 58 puntos (semáforo amarillo) con carga de trabajo alta. Conviene priorizar tareas y definir límites semanales.', 'Priorizar backlog y revisar carga con el líder.', '2026-11-18 19:10:00'),
+(4, 5, 3, 'Mateo Silva registró 58 puntos (semáforo rojo) con carga de trabajo alta. Conviene priorizar tareas y definir límites semanales.', 'Priorizar backlog y revisar carga con el líder.', '2026-11-18 19:10:00'),
 (5, 8, 41, 'Emilia Báez obtuvo 45 puntos en período de prueba (semáforo rojo). Se recomienda acompañamiento cercano y aclaración de criterios.', 'Reforzar seguimiento semanal en período de prueba.', '2026-11-19 11:00:00');
 
 INSERT INTO `metas_empleado` (`id_meta`, `id_empleado`, `id_evaluador`, `titulo`, `descripcion`, `estado`, `progreso`, `fecha_limite`, `fecha_completada`, `comentarios_empleado`) VALUES

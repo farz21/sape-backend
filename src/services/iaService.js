@@ -26,24 +26,25 @@ const generarAnalisisDuelo = async (empleadoA, empleadoB) => {
 
       INSTRUCCIONES:
 
-      1. Compara objetivamente sus fortalezas y debilidades.
-      2. Analiza sus evaluaciones y tendencias de rendimiento.
-      3. Considera sus niveles de motivación y carga laboral.
-      4. Analiza los logros y obstáculos reportados.
-      5. Compara ambos perfiles según los datos disponibles.
-      6. Proporciona recomendaciones concretas para mejorar.
-      7. Redacta una conclusión indicando cuál candidato
+1. Compara objetivamente sus fortalezas y debilidades.
+2. Analiza sus evaluaciones y tendencias de rendimiento.
+3. Si el perfil incluye "competencias" (con promedio_puntaje y tipo_skill: Técnica o Blanda), compáralas e inclúyelas en fortalezas, mejoras o factores comparados.
+4. Considera sus niveles de motivación y carga laboral.
+5. Analiza los logros y obstáculos reportados.
+6. Compara ambos perfiles según los datos disponibles.
+7. Proporciona recomendaciones concretas para mejorar.
+8. Redacta una conclusión indicando cuál candidato
          presenta mejores condiciones según la evidencia.
 
       IMPORTANTE:
-      - No inventes información.
-      - No supongas datos que no estén disponibles.
-      - Si faltan evaluaciones, indícalo.
-      - No confundas los puntajes ni los promedios.
-      - No consideres automáticamente que más tareas
+- No inventes información.
+- No supongas datos que no estén disponibles.
+- Si faltan evaluaciones o competencias evaluadas, indícalo.
+- No confundas los puntajes ni los promedios.
+- No consideres automáticamente que más tareas
         significan mejor rendimiento.
-      - Ten en cuenta la sobrecarga laboral.
-      - La recomendación es orientativa, no una decisión definitiva.
+- Ten en cuenta la sobrecarga laboral.
+- La recomendación es orientativa, no una decisión definitiva.
 
       Devuelve exclusivamente los datos solicitados
       en la estructura JSON definida.
@@ -57,23 +58,23 @@ const generarAnalisisDuelo = async (empleadoA, empleadoB) => {
         type: "object",
         properties: {
           resumen: {
-            type: "string"
+            type: "string",
           },
           fortalezas_a: {
             type: "array",
-            items: { type: "string" }
+            items: { type: "string" },
           },
           fortalezas_b: {
             type: "array",
-            items: { type: "string" }
+            items: { type: "string" },
           },
           mejoras_a: {
             type: "array",
-            items: { type: "string" }
+            items: { type: "string" },
           },
           mejoras_b: {
             type: "array",
-            items: { type: "string" }
+            items: { type: "string" },
           },
           factores_comparados: {
             type: "array",
@@ -82,23 +83,19 @@ const generarAnalisisDuelo = async (empleadoA, empleadoB) => {
               properties: {
                 factor: { type: "string" },
                 empleado_a: { type: "string" },
-                empleado_b: { type: "string" }
+                empleado_b: { type: "string" },
               },
-              required: [
-                "factor",
-                "empleado_a",
-                "empleado_b"
-              ],
-              additionalProperties: false
-            }
+              required: ["factor", "empleado_a", "empleado_b"],
+              additionalProperties: false,
+            },
           },
           recomendaciones: {
             type: "array",
-            items: { type: "string" }
+            items: { type: "string" },
           },
           conclusion: {
-            type: "string"
-          }
+            type: "string",
+          },
         },
         required: [
           "resumen",
@@ -108,10 +105,10 @@ const generarAnalisisDuelo = async (empleadoA, empleadoB) => {
           "mejoras_b",
           "factores_comparados",
           "recomendaciones",
-          "conclusion"
+          "conclusion",
         ],
-        additionalProperties: false
-      }
+        additionalProperties: false,
+      },
     };
 
     console.log(`[Groq IA] Generando duelo con ${MODELO}...`);
@@ -124,18 +121,18 @@ const generarAnalisisDuelo = async (empleadoA, empleadoB) => {
           content:
             "Eres un analista de Recursos Humanos. " +
             "Debes responder utilizando exclusivamente " +
-            "la estructura JSON solicitada."
+            "la estructura JSON solicitada.",
         },
         {
           role: "user",
-          content: prompt
-        }
+          content: prompt,
+        },
       ],
       response_format: {
         type: "json_schema",
-        json_schema: esquemaDuelo
+        json_schema: esquemaDuelo,
       },
-      temperature: 0.4
+      temperature: 0.4,
     });
 
     const contenido = chatCompletion.choices[0]?.message?.content;
@@ -150,13 +147,11 @@ const generarAnalisisDuelo = async (empleadoA, empleadoB) => {
     console.log("[Groq IA] Análisis estructurado generado.");
 
     return analisis;
-
   } catch (error) {
     console.error("[Groq IA] Error al generar el duelo:", error);
 
     throw new Error(
-      "No se pudo generar el análisis comparativo: " +
-      (error.message || error)
+      "No se pudo generar el análisis comparativo: " + (error.message || error),
     );
   }
 };
@@ -173,11 +168,12 @@ const generarFeedbackEvaluacion = async (evaluacionAdmin, checkinsEmpleado) => {
       REPORTES DEL EMPLEADO (Check-ins recientes): ${JSON.stringify(checkinsEmpleado || [], null, 2)}
 
       Redacta un mensaje de retroalimentación simple, claro y motivador dirigido al empleado.
+      Si hay "competencias_evaluadas" con puntajes o justificaciones, podés apoyarte brevemente en ellas sin alargar el mensaje.
       
       REGLAS ESTRICTAS DE FORMATO:
-      1. Comienza saludando por su nombre real (ej: "Hola ${nombreEmpleado}, ...").
-      2. Sé breve y directo: redacta un único párrafo o máximo dos párrafos cortos (no más de 60-80 palabras en total).
-      3. Menciona de forma simple su puntaje y un consejo rápido o aliento basado en sus check-ins, sin extenderte en explicaciones complejas ni teorizar de más.
+1. Comienza saludando por su nombre real (ej: "Hola ${nombreEmpleado}, ...").
+2. Sé breve y directo: redacta un único párrafo o máximo dos párrafos cortos (no más de 60-80 palabras en total).
+3. Menciona de forma simple su puntaje y un consejo rápido o aliento basado en sus check-ins o competencias, sin extenderte en explicaciones complejas ni teorizar de más.
     `;
 
     const chatCompletion = await groq.chat.completions.create({
@@ -208,7 +204,7 @@ const generarPlanesAccion = async (evaluacion, checkins, feedback) => {
       Actúa como un especialista en Recursos Humanos y desarrollo profesional.
 
       Debes proponer exactamente 3 objetivos de mejora para un empleado,
-      basándote en su evaluación, sus check-ins y su retroalimentación.
+      basándote en su evaluación, las competencias evaluadas (si vienen informadas), sus check-ins y su retroalimentación.
 
       EVALUACIÓN:
       ${JSON.stringify(evaluacion, null, 2)}
@@ -220,12 +216,12 @@ const generarPlanesAccion = async (evaluacion, checkins, feedback) => {
       ${feedback || "No se pudo generar feedback previo."}
 
       REGLAS:
-      1. Los objetivos deben ser concretos, realistas y medibles.
-      2. Deben estar relacionados con las dificultades o áreas de mejora detectadas.
-      3. No inventes información personal ni afirmes que el empleado tiene problemas que no aparecen en los datos.
-      4. Cada objetivo debe tener un título breve y una descripción con acciones concretas.
-      5. El plazo debe expresarse como una cantidad de días entre 7 y 90.
-      6. Utiliza un tono profesional, respetuoso y constructivo.
+1. Los objetivos deben ser concretos, realistas y medibles.
+2. Deben estar relacionados con las dificultades, competencias con menor puntaje o áreas de mejora detectadas.
+3. No inventes información personal ni afirmes que el empleado tiene problemas que no aparecen en los datos.
+4. Cada objetivo debe tener un título breve y una descripción con acciones concretas.
+5. El plazo debe expresarse como una cantidad de días entre 7 y 90.
+6. Utiliza un tono profesional, respetuoso y constructivo.
 
       RESPONDE EXCLUSIVAMENTE con JSON válido, sin Markdown ni explicaciones,
       siguiendo exactamente esta estructura:
@@ -257,7 +253,10 @@ const generarPlanesAccion = async (evaluacion, checkins, feedback) => {
 
     const respuesta = JSON.parse(contenidoLimpio);
 
-    if (!Array.isArray(respuesta.objetivos) || respuesta.objetivos.length === 0) {
+    if (
+      !Array.isArray(respuesta.objetivos) ||
+      respuesta.objetivos.length === 0
+    ) {
       throw new Error("La IA no devolvió objetivos válidos.");
     }
 
@@ -289,15 +288,11 @@ const generarPlanesAccion = async (evaluacion, checkins, feedback) => {
   } catch (error) {
     console.error("Error al generar planes de acción con IA:", error);
     throw new Error(
-      "No se pudieron generar los planes de acción: " + (error.message || error)
+      "No se pudieron generar los planes de acción: " +
+        (error.message || error),
     );
   }
 };
-/*
-module.exports = {
-  generarAnalisisDuelo,
-  generarFeedbackEvaluacion,
-};*/
 
 module.exports = {
   generarAnalisisDuelo,

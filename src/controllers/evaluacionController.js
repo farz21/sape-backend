@@ -1,16 +1,24 @@
 const db = require("../config/db");
 const iaService = require("../services/iaService"); // Importamos el servicio de IA para generar feedback
 
-// Obtener detalle de un empleado, sus evaluaciones, su último check-in y el historial completo de check-ins
+// Obtener detalle de un empleado, sus evaluaciones (con competencias de detalle_eval), su último check-in y el historial completo de check-ins
 const obtenerHistorialEmpleado = async (req, res) => {
-  const { id } = req.params; // Aquí llega el id_empleado
+  const { id } = req.params;
 
   try {
-    // 1. Buscamos directamente por la tabla empleados y traemos los datos del usuario asociado
     const [empleadoFicha] = await db.execute(
       `SELECT 
-        u.id as id_usuario, u.nombre, u.apellido, u.email, u.creado_en, u.empresa, u.avatar_url,
-        e.id_empleado, e.legajo, e.fecha_ingreso, e.id_puesto
+        u.id as id_usuario,
+        u.nombre,
+        u.apellido,
+        u.email,
+        u.creado_en,
+        u.empresa,
+        u.avatar_url,
+        e.id_empleado,
+        e.legajo,
+        e.fecha_ingreso,
+        e.id_puesto
       FROM empleados e
       LEFT JOIN usuarios u ON e.id_usuario = u.id
       WHERE e.id_empleado = ?`,
@@ -25,51 +33,136 @@ const obtenerHistorialEmpleado = async (req, res) => {
 
     const idEmpleadoReal = empleadoFicha[0].id_empleado;
 
-    // 2. Buscamos las evaluaciones asociadas a ese id_empleado
     const [evaluaciones] = await db.execute(
-      `SELECT ev.id_evaluacion, ev.fecha, ev.periodo, ev.puntaje_final, ev.semaforo,
-              ia.analisis_generado 
-       FROM evaluaciones ev
-       LEFT JOIN feedback_ia_evaluaciones ia ON ev.id_evaluacion = ia.id_evaluacion
-       WHERE ev.id_empleado = ? 
-       ORDER BY ev.fecha DESC`,
+      `SELECT
+        ev.id_evaluacion,
+        ev.fecha,
+        ev.periodo,
+        ev.puntaje_final,
+        ev.semaforo,
+        ia.analisis_generado
+      FROM evaluaciones ev
+      LEFT JOIN feedback_ia_evaluaciones ia
+        ON ev.id_evaluacion = ia.id_evaluacion
+      WHERE ev.id_empleado = ?
+      ORDER BY ev.fecha DESC`,
       [idEmpleadoReal],
     );
 
-    // 3. Buscamos el último check-in registrado por el empleado (el más reciente)
+    const [detallesEval] = await db.execute(
+      `SELECT
+        d.id_detalle,
+        d.id_evaluacion,
+        d.id_competencia,
+        c.nombre AS competencia,
+        c.tipo_skill,
+        d.puntaje_obtenido,
+        d.justificacion
+       FROM detalle_eval d
+       INNER JOIN competencias c ON d.id_competencia = c.id_competencia
+       INNER JOIN evaluaciones ev ON d.id_evaluacion = ev.id_evaluacion
+       WHERE ev.id_empleado = ?
+       ORDER BY d.id_detalle ASC`,
+      [idEmpleadoReal],
+    );
+
+    const detallesPorEvaluacion = new Map();
+    for (const det of detallesEval) {
+      const lista = detallesPorEvaluacion.get(det.id_evaluacion) || [];
+      lista.push({
+        id_detalle: det.id_detalle,
+        id_competencia: det.id_competencia,
+        competencia: det.competencia,
+        tipo_skill: det.tipo_skill,
+        puntaje_obtenido: Number(det.puntaje_obtenido),
+        justificacion: det.justificacion,
+      });
+      detallesPorEvaluacion.set(det.id_evaluacion, lista);
+    }
+
+    const evaluacionesConDetalles = evaluaciones.map((ev) => ({
+      ...ev,
+      detalles: detallesPorEvaluacion.get(ev.id_evaluacion) || [],
+    }));
+
     const [ultimoCheckin] = await db.execute(
-      `SELECT nivel_motivacion, carga_trabajo, logros_semana, obstaculos, fecha 
-       FROM checkins_empleado 
-       WHERE id_empleado = ? 
-       ORDER BY id_checkin DESC LIMIT 1`,
+      `SELECT
+        nivel_motivacion,
+        carga_trabajo,
+        logros_semana,
+        obstaculos,
+        fecha
+      FROM checkins_empleado
+      WHERE id_empleado = ?
+      ORDER BY id_checkin DESC
+      LIMIT 1`,
       [idEmpleadoReal],
     );
 
-    // 📋 4. NUEVO: Buscamos el HISTORIAL COMPLETO de check-ins (incluyendo el link_evidencia) para la auditoría del admin
     const [checkins] = await db.execute(
-      `SELECT id_checkin, nivel_motivacion, carga_trabajo, logros_semana, obstaculos, link_evidencia, fecha 
-       FROM checkins_empleado 
-       WHERE id_empleado = ? 
-       ORDER BY fecha DESC`,
+      `SELECT
+        id_checkin,
+        nivel_motivacion,
+        carga_trabajo,
+        logros_semana,
+        obstaculos,
+        link_evidencia,
+        fecha
+      FROM checkins_empleado
+      WHERE id_empleado = ?
+      ORDER BY fecha DESC`,
       [idEmpleadoReal],
     );
 
-    // 5. Respondemos todo junto incluyendo la lista completa de check-ins
+    const [metas] = await db.execute(
+      `SELECT
+        id_meta,
+        titulo,
+        descripcion,
+        estado,
+        progreso,
+        fecha_limite,
+        fecha_completada,
+        comentarios_empleado
+      FROM metas_empleado
+      WHERE id_empleado = ?
+      ORDER BY fecha_limite IS NULL, fecha_limite ASC, id_meta DESC`,
+      [idEmpleadoReal],
+    );
+
+    const [planes] = await db.execute(
+      `SELECT
+        id_plan,
+        id_evaluacion,
+        objetivo,
+        fecha_limite,
+        estado_cumplimiento
+      FROM planes_accion
+      WHERE id_empleado = ?
+      ORDER BY fecha_limite IS NULL, fecha_limite ASC, id_plan DESC`,
+      [idEmpleadoReal],
+    );
+
     return res.status(200).json({
       datos: empleadoFicha[0],
-      evaluaciones: evaluaciones,
-      checkins: checkins || [], // 👈 Enviamos la lista completa al frontend
-      ultimoCheckin: ultimoCheckin[0] || null, // El más reciente para referencia rápida
+      evaluaciones: evaluacionesConDetalles,
+      metas,
+      planes,
+      checkins,
+      ultimoCheckin: ultimoCheckin[0] || null,
     });
   } catch (error) {
     console.error("Error al obtener historial:", error);
-    return res.status(500).json({ mensaje: "Error al obtener el historial." });
+
+    return res.status(500).json({
+      mensaje: "Error al obtener el historial.",
+    });
   }
 };
 
-// Registrar una nueva evaluación y generar planes automáticamente
+// Registrar una nueva evaluación, guardar detalle_eval y generar planes automáticamente
 const crearEvaluacion = async (req, res) => {
-  const { id_empleado, periodo, puntaje_final, semaforo } = req.body;
+  const { id_empleado, periodo, puntaje_final, semaforo, detalles } = req.body;
   const id_evaluador = req.usuario.id;
   const fecha = new Date().toISOString().split("T")[0];
 
@@ -90,34 +183,90 @@ const crearEvaluacion = async (req, res) => {
     const idEmpleadoReal = empCheck[0].id_empleado;
     const idUsuarioEmpleado = empCheck[0].id_usuario;
 
+    // Validar y preparar detalles por competencia si vienen en el payload
+    const detallesValidos = Array.isArray(detalles)
+      ? detalles
+          .filter(
+            (item) =>
+              item &&
+              item.id_competencia &&
+              item.puntaje_obtenido !== undefined &&
+              item.puntaje_obtenido !== null &&
+              !Number.isNaN(Number(item.puntaje_obtenido)),
+          )
+          .map((item) => ({
+            id_competencia: Number(item.id_competencia),
+            puntaje_obtenido: Number(item.puntaje_obtenido),
+            justificacion: String(item.justificacion || "").trim(),
+          }))
+      : [];
+
+    // Si no se envió puntaje_final pero sí detalles válidos, calcular promedio
+    let puntajeCalculado = puntaje_final;
+    if (
+      (puntajeCalculado === undefined ||
+        puntajeCalculado === null ||
+        puntajeCalculado === "") &&
+      detallesValidos.length > 0
+    ) {
+      const suma = detallesValidos.reduce(
+        (acc, d) => acc + d.puntaje_obtenido,
+        0,
+      );
+      puntajeCalculado = Number((suma / detallesValidos.length).toFixed(2));
+    }
+
     // 2. Guardar la evaluación
     const [resultado] = await db.execute(
       `INSERT INTO evaluaciones
        (id_empleado, id_evaluador, fecha, periodo, puntaje_final, semaforo)
        VALUES (?, ?, ?, ?, ?, ?)`,
-      [idEmpleadoReal, id_evaluador, fecha, periodo, puntaje_final, semaforo],
+      [
+        idEmpleadoReal,
+        id_evaluador,
+        fecha,
+        periodo,
+        puntajeCalculado,
+        semaforo,
+      ],
     );
 
     const idEvaluacionGenerada = resultado.insertId;
+
+    // 2b. Guardar detalle por competencia en detalle_eval
+    for (const det of detallesValidos) {
+      await db.execute(
+        `INSERT INTO detalle_eval
+         (id_evaluacion, id_competencia, puntaje_obtenido, justificacion)
+         VALUES (?, ?, ?, ?)`,
+        [
+          idEvaluacionGenerada,
+          det.id_competencia,
+          det.puntaje_obtenido,
+          det.justificacion,
+        ],
+      );
+    }
+
     // Notificar al empleado sobre la nueva evaluación
-try {
-  await db.execute(
-    `INSERT INTO notificaciones
-     (id_usuario, titulo, mensaje, tipo)
-     VALUES (?, ?, ?, ?)`,
-    [
-      idUsuarioEmpleado,
-      "Nueva evaluación",
-      `Se registró una nueva evaluación correspondiente al período ${periodo}. Ya podés consultar los resultados en SAPE.`,
-      "evaluacion"
-    ]
-  );
-} catch (errorNotificacion) {
-  console.error(
-    "No se pudo crear la notificación de evaluación:",
-    errorNotificacion
-  );
-}
+    try {
+      await db.execute(
+        `INSERT INTO notificaciones
+         (id_usuario, titulo, mensaje, tipo)
+         VALUES (?, ?, ?, ?)`,
+        [
+          idUsuarioEmpleado,
+          "Nueva evaluación",
+          `Se registró una nueva evaluación correspondiente al período ${periodo}. Ya podés consultar los resultados en SAPE.`,
+          "evaluacion",
+        ],
+      );
+    } catch (errorNotificacion) {
+      console.error(
+        "No se pudo crear la notificación de evaluación:",
+        errorNotificacion,
+      );
+    }
 
     // Datos que se utilizarán para las dos funciones de IA
     let checkins = [];
@@ -147,14 +296,15 @@ try {
       );
 
       if (infoUsuario.length > 0) {
-        nombreCompleto = `${infoUsuario[0].nombre} ${infoUsuario[0].apellido}`;
+        nombreCompleto = `${infoUsuario[0].nombre}${infoUsuario[0].apellido}`;
       }
 
       const evaluacionAdmin = {
         nombre_empleado: nombreCompleto,
         periodo,
-        puntaje_final,
+        puntaje_final: puntajeCalculado,
         semaforo,
+        competencias_evaluadas: detallesValidos,
       };
 
       feedbackGenerado = await iaService.generarFeedbackEvaluacion(
@@ -182,9 +332,10 @@ try {
       const evaluacionParaIA = {
         nombre_empleado: nombreCompleto,
         periodo,
-        puntaje_final,
+        puntaje_final: puntajeCalculado,
         semaforo,
         fecha,
+        competencias_evaluadas: detallesValidos,
       };
 
       const objetivos = await iaService.generarPlanesAccion(
@@ -206,7 +357,7 @@ try {
         ].join("-");
 
         // Guardar el plan vinculado a la evaluación
-        const objetivoCompleto = `${objetivo.titulo}: ${objetivo.descripcion}`;
+        const objetivoCompleto = `${objetivo.titulo}:${objetivo.descripcion}`;
 
         await db.execute(
           `INSERT INTO planes_accion
@@ -237,10 +388,10 @@ try {
 
         cantidadPlanes++;
       }
-       } catch (errorPlanes) {
+    } catch (errorPlanes) {
       console.error(
         "Advertencia: la evaluación se guardó, pero no se pudieron generar todos los planes:",
-        errorPlanes
+        errorPlanes,
       );
     }
 
@@ -255,21 +406,22 @@ try {
             idUsuarioEmpleado,
             "Nuevos planes de acción",
             `Se generaron ${cantidadPlanes} objetivos personalizados para ayudarte a mejorar tu desempeño. Ya podés consultarlos en la sección Mis metas.`,
-            "meta"
-          ]
+            "meta",
+          ],
         );
       } catch (errorNotificacion) {
         console.error(
           "No se pudo crear la notificación de planes:",
-          errorNotificacion
+          errorNotificacion,
         );
       }
     }
 
-    // 6. Responder al administrador
+    // 7. Responder al administrador
     return res.status(201).json({
       mensaje: "Evaluación registrada correctamente.",
       id_evaluacion: idEvaluacionGenerada,
+      detalles_guardados: detallesValidos.length,
       feedback_generado: Boolean(feedbackGenerado),
       planes_generados: cantidadPlanes,
     });
