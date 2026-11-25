@@ -8,6 +8,8 @@ const metasController = require("../controllers/metasController");
 const proyectoController = require("../controllers/proyectoController");
 const dueloController = require("../controllers/dueloController");
 const adminController = require("../controllers/adminController");
+const puestoController = require("../controllers/puestoController");
+const proyectoEmpleadoController = require("../controllers/proyectoEmpleadoController");
 
 const {
   registrarCheckin,
@@ -41,6 +43,64 @@ router.put(
   verificarToken,
   evaluarRolAdmin,
   notificacionController.marcarNotificacionLeida,
+);
+
+// GESTION DE DEPARTAMENTOS
+
+router.get(
+  "/departamentos",
+  verificarToken,
+  puestoController.obtenerDepartamentos,
+);
+
+router.post(
+  "/departamentos",
+  verificarToken,
+  evaluarRolAdmin,
+  puestoController.crearDepartamento,
+);
+
+router.put(
+  "/departamentos/:id",
+  verificarToken,
+  evaluarRolAdmin,
+  puestoController.actualizarDepartamento,
+);
+
+router.delete(
+  "/departamentos/:id",
+  verificarToken,
+  evaluarRolAdmin,
+  puestoController.eliminarDepartamento,
+);
+
+// GESTION DE PUESTOS
+
+router.get(
+  "/puestos",
+  verificarToken,
+  puestoController.obtenerPuestos,
+);
+
+router.post(
+  "/puestos",
+  verificarToken,
+  evaluarRolAdmin,
+  puestoController.crearPuesto,
+);
+
+router.put(
+  "/puestos/:id",
+  verificarToken,
+  evaluarRolAdmin,
+  puestoController.actualizarPuesto,
+);
+
+router.delete(
+  "/puestos/:id",
+  verificarToken,
+  evaluarRolAdmin,
+  puestoController.eliminarPuesto,
 );
 
 // GESTION DE METAS
@@ -133,14 +193,39 @@ router.delete(
   proyectoController.eliminarAsignacion,
 );
 
-// LISTADO Y DETALLE DE EMPLEADOS
+// CRUD DE EMPLEADOS
 
-router.get("/empleados", verificarToken, userController.obtenerEmpleados);
+router.get(
+  "/empleados",
+  verificarToken,
+  userController.obtenerEmpleados,
+);
+
+router.post(
+  "/empleados",
+  verificarToken,
+  evaluarRolAdmin,
+  userController.crearEmpleado,
+);
 
 router.get(
   "/empleados/:id",
   verificarToken,
   evaluacionController.obtenerHistorialEmpleado,
+);
+
+router.put(
+  "/empleados/:id",
+  verificarToken,
+  evaluarRolAdmin,
+  userController.actualizarEmpleado,
+);
+
+router.delete(
+  "/empleados/:id",
+  verificarToken,
+  evaluarRolAdmin,
+  userController.eliminarEmpleado,
 );
 
 // EVALUACIONES
@@ -159,35 +244,6 @@ router.delete(
   evaluacionController.eliminarEvaluacion,
 );
 
-// CRUD DE EMPLEADOS
-
-router.post(
-  "/empleados",
-  verificarToken,
-  evaluarRolAdmin,
-  userController.crearEmpleado,
-);
-
-router.put(
-  "/empleados/:id",
-  verificarToken,
-  evaluarRolAdmin,
-  userController.actualizarEmpleado,
-);
-
-router.delete(
-  "/empleados/:id",
-  verificarToken,
-  evaluarRolAdmin,
-  userController.eliminarEmpleado,
-);
-
-router.put(
-  "/empleado/cambiar-password",
-  verificarToken,
-  userController.cambiarPassword,
-);
-
 // DUELOS CON IA
 
 router.post(
@@ -202,6 +258,20 @@ router.get(
   verificarToken,
   evaluarRolAdmin,
   dueloController.obtenerHistorialDuelos,
+);
+
+router.get(
+  "/admin/duelos/:id",
+  verificarToken,
+  evaluarRolAdmin,
+  dueloController.obtenerDueloPorId,
+);
+
+router.delete(
+  "/admin/duelos/:id",
+  verificarToken,
+  evaluarRolAdmin,
+  dueloController.eliminarDuelo,
 );
 
 // CHECK-INS ADMIN
@@ -231,6 +301,12 @@ router.put(
   "/empleado/perfil/avatar",
   verificarToken,
   userController.actualizarAvatar,
+);
+
+router.put(
+  "/empleado/cambiar-password",
+  verificarToken,
+  userController.cambiarPassword,
 );
 
 router.post(
@@ -273,6 +349,12 @@ router.put(
   "/empleado/notificaciones/leidas",
   verificarToken,
   notificacionController.marcarTodasLeidas,
+);
+
+router.get(
+  "/empleado/proyectos",
+  verificarToken,
+  proyectoEmpleadoController.obtenerMisProyectos,
 );
 
 module.exports = router;
