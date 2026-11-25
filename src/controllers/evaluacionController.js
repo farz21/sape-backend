@@ -3,14 +3,22 @@ const iaService = require("../services/iaService"); // Importamos el servicio de
 
 // Obtener detalle de un empleado, sus evaluaciones, su último check-in y el historial completo de check-ins
 const obtenerHistorialEmpleado = async (req, res) => {
-  const { id } = req.params; // Aquí llega el id_empleado
+  const { id } = req.params;
 
   try {
-    // 1. Buscamos directamente por la tabla empleados y traemos los datos del usuario asociado
     const [empleadoFicha] = await db.execute(
       `SELECT 
-        u.id as id_usuario, u.nombre, u.apellido, u.email, u.creado_en, u.empresa, u.avatar_url,
-        e.id_empleado, e.legajo, e.fecha_ingreso, e.id_puesto
+        u.id as id_usuario,
+        u.nombre,
+        u.apellido,
+        u.email,
+        u.creado_en,
+        u.empresa,
+        u.avatar_url,
+        e.id_empleado,
+        e.legajo,
+        e.fecha_ingreso,
+        e.id_puesto
       FROM empleados e
       LEFT JOIN usuarios u ON e.id_usuario = u.id
       WHERE e.id_empleado = ?`,
@@ -25,45 +33,94 @@ const obtenerHistorialEmpleado = async (req, res) => {
 
     const idEmpleadoReal = empleadoFicha[0].id_empleado;
 
-    // 2. Buscamos las evaluaciones asociadas a ese id_empleado
     const [evaluaciones] = await db.execute(
-      `SELECT ev.id_evaluacion, ev.fecha, ev.periodo, ev.puntaje_final, ev.semaforo,
-              ia.analisis_generado 
-       FROM evaluaciones ev
-       LEFT JOIN feedback_ia_evaluaciones ia ON ev.id_evaluacion = ia.id_evaluacion
-       WHERE ev.id_empleado = ? 
-       ORDER BY ev.fecha DESC`,
+      `SELECT
+        ev.id_evaluacion,
+        ev.fecha,
+        ev.periodo,
+        ev.puntaje_final,
+        ev.semaforo,
+        ia.analisis_generado
+      FROM evaluaciones ev
+      LEFT JOIN feedback_ia_evaluaciones ia
+        ON ev.id_evaluacion = ia.id_evaluacion
+      WHERE ev.id_empleado = ?
+      ORDER BY ev.fecha DESC`,
       [idEmpleadoReal],
     );
 
-    // 3. Buscamos el último check-in registrado por el empleado (el más reciente)
     const [ultimoCheckin] = await db.execute(
-      `SELECT nivel_motivacion, carga_trabajo, logros_semana, obstaculos, fecha 
-       FROM checkins_empleado 
-       WHERE id_empleado = ? 
-       ORDER BY id_checkin DESC LIMIT 1`,
+      `SELECT
+        nivel_motivacion,
+        carga_trabajo,
+        logros_semana,
+        obstaculos,
+        fecha
+      FROM checkins_empleado
+      WHERE id_empleado = ?
+      ORDER BY id_checkin DESC
+      LIMIT 1`,
       [idEmpleadoReal],
     );
 
-    // 📋 4. NUEVO: Buscamos el HISTORIAL COMPLETO de check-ins (incluyendo el link_evidencia) para la auditoría del admin
     const [checkins] = await db.execute(
-      `SELECT id_checkin, nivel_motivacion, carga_trabajo, logros_semana, obstaculos, link_evidencia, fecha 
-       FROM checkins_empleado 
-       WHERE id_empleado = ? 
-       ORDER BY fecha DESC`,
+      `SELECT
+        id_checkin,
+        nivel_motivacion,
+        carga_trabajo,
+        logros_semana,
+        obstaculos,
+        link_evidencia,
+        fecha
+      FROM checkins_empleado
+      WHERE id_empleado = ?
+      ORDER BY fecha DESC`,
       [idEmpleadoReal],
     );
 
-    // 5. Respondemos todo junto incluyendo la lista completa de check-ins
+    const [metas] = await db.execute(
+      `SELECT
+        id_meta,
+        titulo,
+        descripcion,
+        estado,
+        progreso,
+        fecha_limite,
+        fecha_completada,
+        comentarios_empleado
+      FROM metas_empleado
+      WHERE id_empleado = ?
+      ORDER BY fecha_limite IS NULL, fecha_limite ASC, id_meta DESC`,
+      [idEmpleadoReal],
+    );
+
+    const [planes] = await db.execute(
+      `SELECT
+        id_plan,
+        id_evaluacion,
+        objetivo,
+        fecha_limite,
+        estado_cumplimiento
+      FROM planes_accion
+      WHERE id_empleado = ?
+      ORDER BY fecha_limite IS NULL, fecha_limite ASC, id_plan DESC`,
+      [idEmpleadoReal],
+    );
+
     return res.status(200).json({
       datos: empleadoFicha[0],
-      evaluaciones: evaluaciones,
-      checkins: checkins || [], // 👈 Enviamos la lista completa al frontend
-      ultimoCheckin: ultimoCheckin[0] || null, // El más reciente para referencia rápida
+      evaluaciones,
+      metas,
+      planes,
+      checkins,
+      ultimoCheckin: ultimoCheckin[0] || null,
     });
   } catch (error) {
     console.error("Error al obtener historial:", error);
-    return res.status(500).json({ mensaje: "Error al obtener el historial." });
+
+    return res.status(500).json({
+      mensaje: "Error al obtener el historial.",
+    });
   }
 };
 

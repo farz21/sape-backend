@@ -1,81 +1,269 @@
-const db = require('../config/db');
+const db = require("../config/db");
+
+const estadosValidos = ["Pendiente", "En progreso", "Completada"];
 
 const obtenerMisMetas = async (req, res) => {
-  const id_usuario = req.usuario.id;
-
   try {
-    // 1. Verificamos si este usuario tiene un perfil en la tabla 'empleados'
     const [empleados] = await db.execute(
-      'SELECT id_empleado FROM empleados WHERE id_usuario = ?', 
-      [id_usuario]
+      "SELECT id_empleado FROM empleados WHERE id_usuario = ?",
+      [req.usuario.id],
     );
 
-    if (empleados.length === 0) {
-      return res.status(403).json({ 
-        mensaje: "Acceso denegado. Tu usuario no tiene un perfil de empleado asociado." 
+    if (!empleados.length) {
+      return res.status(403).json({
+        mensaje: "Tu usuario no tiene un perfil de empleado asociado.",
       });
     }
 
-    const id_empleado = empleados[0].id_empleado;
-
-    // 2. Traemos las metas asignadas a este empleado específico
     const [metas] = await db.execute(
-      'SELECT * FROM metas_empleado WHERE id_empleado = ? ORDER BY fecha_limite ASC',
-      [id_empleado]
+      "SELECT * FROM metas_empleado WHERE id_empleado = ? ORDER BY fecha_limite ASC",
+      [empleados[0].id_empleado],
     );
-    
-    res.status(200).json(metas);
+
+    return res.status(200).json(metas);
   } catch (error) {
     console.error("Error al obtener metas:", error);
-    res.status(500).json({ mensaje: "Error interno del servidor." });
+    return res.status(500).json({ mensaje: "Error interno del servidor." });
   }
 };
 
 const actualizarProgresoMeta = async (req, res) => {
-  const id_usuario = req.usuario.id;
-  const { id } = req.params; // ID de la meta que viene en la URL
   const { progreso, estado, comentarios_empleado } = req.body;
 
+  if (
+    !Number.isInteger(Number(progreso)) ||
+    Number(progreso) < 0 ||
+    Number(progreso) > 100
+  ) {
+    return res
+      .status(400)
+      .json({ mensaje: "El progreso debe estar entre 0 y 100." });
+  }
+
   try {
-    // 1. Verificamos si este usuario tiene un perfil en la tabla 'empleados'
     const [empleados] = await db.execute(
-      'SELECT id_empleado FROM empleados WHERE id_usuario = ?', 
-      [id_usuario]
+      "SELECT id_empleado FROM empleados WHERE id_usuario = ?",
+      [req.usuario.id],
     );
 
-    if (empleados.length === 0) {
-      return res.status(403).json({ 
-        mensaje: "Acceso denegado. Tu usuario no tiene un perfil de empleado asociado." 
+    if (!empleados.length) {
+      return res.status(403).json({
+        mensaje: "Tu usuario no tiene un perfil de empleado asociado.",
       });
     }
 
-    const id_empleado = empleados[0].id_empleado;
+    const estadoFinal =
+      Number(progreso) === 100
+        ? "Completada"
+        : estado === "En progreso"
+          ? "En progreso"
+          : "Pendiente";
 
-    // 2. Calculamos si la meta se completó hoy
-    let fecha_completada = null;
-    if (progreso === 100 || estado === 'Completada') {
-      fecha_completada = new Date().toISOString().split('T')[0];
-    }
+    const fechaCompletada =
+      estadoFinal === "Completada"
+        ? new Date().toISOString().slice(0, 10)
+        : null;
 
-    // 3. Actualizamos asegurándonos de que la meta le pertenezca a este empleado
     const [resultado] = await db.execute(
-      `UPDATE metas_empleado 
-       SET progreso = ?, estado = ?, comentarios_empleado = ?, fecha_completada = ? 
+      `UPDATE metas_empleado
+       SET progreso = ?, estado = ?, comentarios_empleado = ?, fecha_completada = ?
        WHERE id_meta = ? AND id_empleado = ?`,
-      [progreso, estado, comentarios_empleado, fecha_completada, id, id_empleado]
+      [
+        Number(progreso),
+        estadoFinal,
+        comentarios_empleado || null,
+        fechaCompletada,
+        req.params.id,
+        empleados[0].id_empleado,
+      ],
     );
 
-    if (resultado.affectedRows === 0) {
-      return res.status(404).json({ 
-        mensaje: "Meta no encontrada o no tienes permisos para modificarla." 
-      });
+    if (!resultado.affectedRows) {
+      return res.status(404).json({ mensaje: "Meta no encontrada." });
     }
 
-    res.status(200).json({ mensaje: "Progreso de la meta actualizado correctamente." });
+    return res.status(200).json({
+      mensaje: "Progreso de la meta actualizado correctamente.",
+    });
   } catch (error) {
     console.error("Error al actualizar meta:", error);
-    res.status(500).json({ mensaje: "Error interno del servidor." });
+    return res.status(500).json({ mensaje: "Error interno del servidor." });
   }
 };
 
-module.exports = { obtenerMisMetas, actualizarProgresoMeta };
+const obtenerMetasAdmin = async (req, res) => {
+  try {
+    const parametros = [];
+
+    let sql = `SELECT m.*, u.nombre, u.apellido, e.legajo
+      FROM metas_empleado m
+      INNER JOIN empleados e ON e.id_empleado = m.id_empleado
+      INNER JOIN usuarios u ON u.id = e.id_usuario`;
+
+    const condiciones = [];
+
+    if (req.query.id_empleado) {
+      condiciones.push("m.id_empleado = ?");
+      parametros.push(req.query.id_empleado);
+    }
+
+    if (req.query.estado) {
+      condiciones.push("m.estado = ?");
+      parametros.push(req.query.estado);
+    }
+
+    if (condiciones.length) {
+      sql += ` WHERE ${condiciones.join(" AND ")}`;
+    }
+
+    sql +=
+      " ORDER BY m.fecha_limite IS NULL, m.fecha_limite ASC, m.id_meta DESC";
+
+    const [metas] = await db.execute(sql, parametros);
+
+    return res.status(200).json(metas);
+  } catch (error) {
+    console.error("Error al listar metas:", error);
+    return res.status(500).json({ mensaje: "Error al obtener las metas." });
+  }
+};
+
+const crearMetaAdmin = async (req, res) => {
+  const { id_empleado, titulo, descripcion, fecha_limite } = req.body;
+
+  if (!id_empleado || !titulo?.trim()) {
+    return res.status(400).json({
+      mensaje: "Empleado y titulo son obligatorios.",
+    });
+  }
+
+  try {
+    const [empleados] = await db.execute(
+      "SELECT id_usuario FROM empleados WHERE id_empleado = ?",
+      [id_empleado],
+    );
+
+    if (!empleados.length) {
+      return res.status(404).json({ mensaje: "Empleado no encontrado." });
+    }
+
+    const [resultado] = await db.execute(
+      `INSERT INTO metas_empleado
+       (id_empleado, id_evaluador, titulo, descripcion, estado, progreso, fecha_limite)
+       VALUES (?, ?, ?, ?, 'Pendiente', 0, ?)`,
+      [
+        id_empleado,
+        req.usuario.id,
+        titulo.trim(),
+        descripcion?.trim() || null,
+        fecha_limite || null,
+      ],
+    );
+
+    try {
+      await db.execute(
+        "INSERT INTO notificaciones (id_usuario, titulo, mensaje, tipo) VALUES (?, ?, ?, 'meta')",
+        [
+          empleados[0].id_usuario,
+          "Nueva meta asignada",
+          `Se te asigno la meta: ${titulo.trim()}.`,
+        ],
+      );
+    } catch (errorNotificacion) {
+      console.error(
+        "No se pudo crear la notificacion de la meta:",
+        errorNotificacion,
+      );
+    }
+
+    return res.status(201).json({
+      mensaje: "Meta creada correctamente.",
+      id_meta: resultado.insertId,
+    });
+  } catch (error) {
+    console.error("Error al crear meta:", error);
+    return res.status(500).json({ mensaje: "Error al crear la meta." });
+  }
+};
+
+const actualizarMetaAdmin = async (req, res) => {
+  const { titulo, descripcion, estado, progreso, fecha_limite } = req.body;
+
+  if (
+    !titulo?.trim() ||
+    !estadosValidos.includes(estado) ||
+    !Number.isInteger(Number(progreso)) ||
+    Number(progreso) < 0 ||
+    Number(progreso) > 100
+  ) {
+    return res.status(400).json({ mensaje: "Revisa los datos de la meta." });
+  }
+
+  const estadoFinal = Number(progreso) === 100 ? "Completada" : estado;
+
+  const fechaCompletada =
+    estadoFinal === "Completada"
+      ? new Date().toISOString().slice(0, 10)
+      : null;
+
+  try {
+    const [resultado] = await db.execute(
+      `UPDATE metas_empleado
+       SET titulo = ?, descripcion = ?, estado = ?, progreso = ?, fecha_limite = ?, fecha_completada = ?
+       WHERE id_meta = ?`,
+      [
+        titulo.trim(),
+        descripcion?.trim() || null,
+        estadoFinal,
+        Number(progreso),
+        fecha_limite || null,
+        fechaCompletada,
+        req.params.id,
+      ],
+    );
+
+    if (!resultado.affectedRows) {
+      return res.status(404).json({ mensaje: "Meta no encontrada." });
+    }
+
+    return res.status(200).json({
+      mensaje: "Meta actualizada correctamente.",
+    });
+  } catch (error) {
+    console.error("Error al actualizar meta:", error);
+    return res.status(500).json({
+      mensaje: "Error al actualizar la meta.",
+    });
+  }
+};
+
+const eliminarMetaAdmin = async (req, res) => {
+  try {
+    const [resultado] = await db.execute(
+      "DELETE FROM metas_empleado WHERE id_meta = ?",
+      [req.params.id],
+    );
+
+    if (!resultado.affectedRows) {
+      return res.status(404).json({ mensaje: "Meta no encontrada." });
+    }
+
+    return res.status(200).json({
+      mensaje: "Meta eliminada correctamente.",
+    });
+  } catch (error) {
+    console.error("Error al eliminar meta:", error);
+    return res.status(500).json({
+      mensaje: "Error al eliminar la meta.",
+    });
+  }
+};
+
+module.exports = {
+  obtenerMisMetas,
+  actualizarProgresoMeta,
+  obtenerMetasAdmin,
+  crearMetaAdmin,
+  actualizarMetaAdmin,
+  eliminarMetaAdmin,
+};
